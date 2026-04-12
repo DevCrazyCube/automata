@@ -1,0 +1,24 @@
+{
+  "name": "automata-frontend",
+  "version": "1.0.0",
+  "description": "Multi-agent protocol visualization frontend (React + Phaser)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "phaser": "^3.60.0",
+    "socket.io-client": "^4.6.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0",
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.32",
+    "autoprefixer": "^10.4.16"
+  }
+}
