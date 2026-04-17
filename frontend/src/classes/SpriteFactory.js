@@ -1,29 +1,32 @@
 // classes/SpriteFactory.js
-// Load pixel-agents PNG assets using Phaser's asset loader
+// Load and setup character sprites as Phaser sprite sheets with animations
 
-function setupPixelAgentsLoader(scene) {
-  // Character sprites - map agents to pixel-agents character indices
-  const characterMap = {
-    deployer: 0,      // char_0.png
-    distributor: 1,   // char_1.png
-    swapper: 2,       // char_2.png
-    extractor: 3,     // char_3.png
-  };
+const TILE_SIZE = 32;
 
-  // Register character sprite images with Phaser loader
-  for (const [agentKey, charId] of Object.entries(characterMap)) {
-    const path = `assets/characters/char_${charId}.png`;
-    scene.load.image(`agent_${agentKey}`, path);
-  }
+export function registerAll(scene) {
+  // Load character sprites as images first
+  scene.load.image('agent_deployer', 'assets/characters/char_0.png');
+  scene.load.image('agent_distributor', 'assets/characters/char_1.png');
+  scene.load.image('agent_swapper', 'assets/characters/char_2.png');
+  scene.load.image('agent_extractor', 'assets/characters/char_3.png');
 
   // Load floor sprites
   for (let i = 1; i <= 9; i++) {
     scene.load.image(`floor_${i}`, `assets/floors/floor_${i}.png`);
   }
+
+  // Listen for load error to create fallbacks
+  scene.load.on('loaderror', (file) => {
+    console.warn(`Failed to load: ${file.key}`);
+  });
+
+  // Create fallbacks if assets don't load
+  scene.load.on('complete', () => {
+    createFallbackSprites(scene);
+  });
 }
 
 function createFallbackSprites(scene) {
-  // Create fallback sprites if PNG loading fails
   const agents = {
     deployer: 0xff5555,
     distributor: 0x44ddcc,
@@ -43,21 +46,21 @@ function createFallbackSprites(scene) {
     }
   }
 
-  // Create fallback floor tiles
+  // Floor tile fallback
   if (!scene.textures.exists('floor_tile')) {
     const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 32;
+    canvas.width = TILE_SIZE;
+    canvas.height = TILE_SIZE;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#d4c9b8';
-    ctx.fillRect(0, 0, 32, 32);
+    ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
     scene.textures.addCanvas('floor_tile', canvas);
   }
 
-  // Create fallback furniture sprites
+  // Furniture fallbacks
   const furnitureKeys = [
     'desk', 'chair', 'coffee_machine', 'couch_64x32', 'table',
-    'whiteboard', 'water_cooler', 'bookshelf', 'plant'
+    'whiteboard', 'water_cooler'
   ];
 
   for (const key of furnitureKeys) {
@@ -73,21 +76,7 @@ function createFallbackSprites(scene) {
   }
 }
 
-export function registerAll(scene) {
-  // Setup Phaser loader for character sprites
-  setupPixelAgentsLoader(scene);
-
-  // Load events: when all assets are loaded, create fallbacks if needed
-  scene.load.on('complete', () => {
-    createFallbackSprites(scene);
-  });
-
-  scene.load.on('loaderror', (fileObj) => {
-    console.warn(`Failed to load asset: ${fileObj.key}`);
-  });
-}
-
 export function registerAnimations(scene) {
-  // Animations handled by sprite texture changes, not frame animations
-  // Pose changes use setTexture() calls
+  // Animations will be sprite texture changes, not frame-based
+  // Phaser will simply swap texture keys when animations are triggered
 }

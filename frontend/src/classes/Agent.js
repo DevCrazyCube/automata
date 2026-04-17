@@ -61,7 +61,8 @@ export default class Agent {
     if (scene.textures.exists(spriteKey)) {
       this.sprite = scene.add.image(0, 0, spriteKey);
       this.sprite.setOrigin(0.5, 0.5);
-      this.sprite.setDisplaySize(32, 64); // Standard character size
+      // Scale character sprite to reasonable size (not full sheet)
+      this.sprite.setDisplaySize(32, 64);
     } else {
       // Fallback: colored rectangle
       this.sprite = scene.add.rectangle(0, 0, 16, 24, tint, 0.9);

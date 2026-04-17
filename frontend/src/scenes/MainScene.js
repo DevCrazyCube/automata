@@ -11,8 +11,8 @@ import IdleBehavior from '../classes/IdleBehavior.js';
 import AgentInteraction from '../classes/AgentInteraction.js';
 import socket from '../services/socketService.js';
 
-export const WORLD_WIDTH  = 800;
-export const WORLD_HEIGHT = 600;
+export const WORLD_WIDTH  = 21 * 32;  // 672px (21 cols × 32px tile size)
+export const WORLD_HEIGHT = 22 * 32;  // 704px (22 rows × 32px tile size)
 
 // Workstation layout constants
 const PAD   = 24;
@@ -142,12 +142,18 @@ class MainScene extends Phaser.Scene {
     // Set up animations after sprites are loaded
     registerAnimations(this);
 
+    // Build office (loads layout and furniture)
     this._buildOffice();
-    this._buildAgents();
-    this._setupIdleBehaviors();
-    this._setupAgentInteraction();
-    this._setupCamera();
-    this._bindSocketHandlers();
+
+    // Wait a frame for furniture to load, then build agents
+    this.time.delayedCall(100, () => {
+      this._buildAgents();
+      this._setupIdleBehaviors();
+      this._setupAgentInteraction();
+      this._setupCamera();
+      this._bindSocketHandlers();
+    });
+  }
 
     // Socket cleanup on scene shutdown (supports HMR).
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this._unbindSocketHandlers());
@@ -167,15 +173,14 @@ class MainScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    // Pixel-agents style camera: clean top-down view with smooth follow
-    cam.setZoom(1.5); // Zoom level for office visibility
-    cam.setLerp(0.08, 0.08); // Smooth camera follow
+    // Fit entire office in view
+    const viewport = this.cameras.main;
+    const zoomX = viewport.width / WORLD_WIDTH;
+    const zoomY = viewport.height / WORLD_HEIGHT;
+    const zoom = Math.min(zoomX, zoomY) * 0.95;
 
-    // Center on first agent with smooth movement
-    const firstAgent = Object.values(this.agents)[0];
-    if (firstAgent) {
-      cam.startFollow(firstAgent.container, true);
-    }
+    cam.setZoom(zoom);
+    cam.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
   }
 
   // ── Office world construction ───────────────────────────────────────────────
@@ -220,12 +225,14 @@ class MainScene extends Phaser.Scene {
   // ── Agent initialisation ────────────────────────────────────────────────────
 
   _buildAgents() {
-    // Place 4 agents at desks in the office
+    // Place 4 agents at desks from layout (DESK_FRONT positions)
+    // From layout: DESK_FRONT at (col: 2, row: 12) and (col: 6, row: 12)
+    const TILE_SIZE = 32;
     const agentPositions = {
-      deployer:    { x: 80, y: 180 },
-      distributor: { x: 250, y: 180 },
-      swapper:     { x: 80, y: 350 },
-      extractor:   { x: 250, y: 350 },
+      deployer:    { x: 2 * TILE_SIZE, y: 12 * TILE_SIZE },      // col 2, row 12
+      distributor: { x: 6 * TILE_SIZE, y: 12 * TILE_SIZE },      // col 6, row 12
+      swapper:     { x: 2 * TILE_SIZE, y: 16 * TILE_SIZE },      // Other desks
+      extractor:   { x: 6 * TILE_SIZE, y: 16 * TILE_SIZE },
     };
 
     const agentConfigs = {
