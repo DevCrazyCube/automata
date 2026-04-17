@@ -42,6 +42,7 @@ export default class Agent {
     this.homeX     = x;
     this.homeY     = y;
     this.currentZone = null;
+    this.idleBehavior = null; // Set by scene after creation
 
     // Walk animation state
     this._walkFrame    = 0;
@@ -286,6 +287,12 @@ export default class Agent {
     this._patrolTimer = this.scene.time.delayedCall(pause, () => {
       this._patrolTimer = null;
       if (this.state !== STATE.IDLE && this.state !== STATE.PATROLLING) return;
+
+      // Check idle behavior (coffee, couch, etc.)
+      if (this.idleBehavior) {
+        this.idleBehavior.update();
+      }
+
       this._doPatrolStep();
     });
   }

@@ -473,6 +473,392 @@ function drawAgentSuccess(bodyColor, bodyDark, hairColor, successPhase) {
   return c;
 }
 
+/**
+ * Draw agent reaching for coffee machine (upward reach).
+ */
+function drawAgentReachingCoffee(bodyColor, bodyDark, hairColor, reachPhase) {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+
+  ctx.globalAlpha = 0.15;
+  rect(ctx, 10, 28, 12, 3, '#000020');
+  ctx.globalAlpha = 1;
+
+  // Legs (standing at machine)
+  rect(ctx, 11, 20, 4, 8, C.pants);
+  rect(ctx, 17, 20, 4, 8, C.pants);
+  rect(ctx, 11, 28, 4, 2, C.shoe);
+  rect(ctx, 17, 28, 4, 2, C.shoe);
+
+  // Body (leaning back slightly)
+  rect(ctx, 10, 12, 12, 8, bodyColor);
+  hline(ctx, 10, 12, 12, bodyDark);
+
+  // Arms reaching up
+  rect(ctx, 9, 6, 4, 12, C.skin);
+  rect(ctx, 19, 6, 4, 12, C.skin);
+
+  // Head
+  rect(ctx, 11, 3, 10, 8, C.skin);
+  rect(ctx, 11, 3, 10, 3, hairColor);
+  px(ctx, 13, 7, C.eye);
+  px(ctx, 18, 7, C.eye);
+
+  return c;
+}
+
+/**
+ * Draw agent writing on whiteboard.
+ */
+function drawAgentWriting(bodyColor, bodyDark, hairColor, writePhase) {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+
+  ctx.globalAlpha = 0.15;
+  rect(ctx, 10, 28, 12, 3, '#000020');
+  ctx.globalAlpha = 1;
+
+  // Legs (standing)
+  rect(ctx, 11, 20, 4, 8, C.pants);
+  rect(ctx, 17, 20, 4, 8, C.pants);
+  rect(ctx, 11, 28, 4, 2, C.shoe);
+  rect(ctx, 17, 28, 4, 2, C.shoe);
+
+  // Body
+  rect(ctx, 10, 12, 12, 8, bodyColor);
+  hline(ctx, 10, 12, 12, bodyDark);
+
+  // Right arm extended, hand writing
+  const armX = writePhase % 2 === 0 ? 20 : 21;
+  rect(ctx, armX, 14, 4, 8, C.skin);
+  rect(ctx, armX + 1, 10, 2, 2, C.skin);
+
+  // Left arm
+  rect(ctx, 7, 15, 3, 6, C.skin);
+
+  // Head (looking at board)
+  rect(ctx, 11, 3, 10, 8, C.skin);
+  rect(ctx, 11, 3, 10, 3, hairColor);
+  px(ctx, 13, 7, C.eye);
+  px(ctx, 18, 7, C.eye);
+
+  return c;
+}
+
+/**
+ * Draw agent in stressed/error pose.
+ */
+function drawAgentError(bodyColor, bodyDark, hairColor, errorPhase) {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+
+  ctx.globalAlpha = 0.15;
+  rect(ctx, 10, 28, 12, 3, '#000020');
+  ctx.globalAlpha = 1;
+
+  // Legs (standing but fidgety)
+  const legOffset = errorPhase % 2 === 0 ? 0 : 1;
+  rect(ctx, 11, 20 + legOffset, 4, 8, C.pants);
+  rect(ctx, 17, 20 - legOffset, 4, 8, C.pants);
+  rect(ctx, 11, 28, 4, 2, C.shoe);
+  rect(ctx, 17, 28, 4, 2, C.shoe);
+
+  // Body (leaning)
+  rect(ctx, 10, 12, 12, 8, bodyColor);
+  hline(ctx, 10, 12, 12, bodyDark);
+
+  // Arms (hand on head stressed pose)
+  rect(ctx, 8, 14, 4, 6, C.skin);
+  rect(ctx, 20, 14, 4, 6, C.skin);
+
+  // Head (worried)
+  rect(ctx, 11, 3, 10, 8, C.skin);
+  rect(ctx, 11, 3, 10, 3, hairColor);
+
+  // Wide eyes (stressed)
+  px(ctx, 12, 7, C.eye);
+  px(ctx, 19, 7, C.eye);
+  px(ctx, 15, 9, C.mouth); // frown
+
+  return c;
+}
+
+/**
+ * Draw sit down animation frame.
+ */
+function drawAgentSittingDown(bodyColor, bodyDark, hairColor, sitPhase) {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+
+  // Variable body height based on phase
+  const bodyY = 12 + sitPhase * 2;
+  const legY = 20 + sitPhase;
+
+  // Legs bending
+  rect(ctx, 11, legY, 4, 6, C.pants);
+  rect(ctx, 17, legY, 4, 6, C.pants);
+  rect(ctx, 11, legY + 6, 4, 2, C.shoe);
+  rect(ctx, 17, legY + 6, 4, 2, C.shoe);
+
+  // Body (lowering)
+  rect(ctx, 10, bodyY, 12, 6, bodyColor);
+  hline(ctx, 10, bodyY, 12, bodyDark);
+
+  // Arms
+  rect(ctx, 7, bodyY + 1, 3, 4, C.skin);
+  rect(ctx, 22, bodyY + 1, 3, 4, C.skin);
+
+  // Head (lowering)
+  rect(ctx, 11, bodyY - 8, 10, 8, C.skin);
+  rect(ctx, 11, bodyY - 8, 10, 3, hairColor);
+
+  return c;
+}
+
+/**
+ * Draw agent getting up from couch.
+ */
+function drawAgentGettingUp(bodyColor, bodyDark, hairColor, getupPhase) {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+
+  // Legs straightening
+  const legY = 22 - getupPhase * 2;
+  rect(ctx, 12, legY, 4, 6, C.pants);
+  rect(ctx, 16, legY, 4, 6, C.pants);
+  rect(ctx, 12, legY + 6, 4, 2, C.shoe);
+  rect(ctx, 16, legY + 6, 4, 2, C.shoe);
+
+  // Body (rising)
+  const bodyY = 16 - getupPhase * 2;
+  rect(ctx, 10, bodyY, 12, 6, bodyColor);
+  hline(ctx, 10, bodyY, 12, bodyDark);
+
+  // Arms
+  rect(ctx, 6, bodyY, 4, 5, C.skin);
+  rect(ctx, 22, bodyY, 4, 5, C.skin);
+
+  // Head (rising)
+  const headY = 8 - getupPhase * 2;
+  rect(ctx, 11, headY, 10, 7, C.skin);
+  rect(ctx, 11, headY, 10, 3, hairColor);
+
+  return c;
+}
+
+/**
+ * Draw thought bubble icon.
+ */
+function drawThoughtBubble() {
+  const c = makeCanvas(16, 16);
+  const ctx = c.getContext('2d');
+  // Cloud shape
+  rect(ctx, 2, 4, 12, 8, C.white);
+  ctx.fillStyle = C.white;
+  ctx.beginPath();
+  ctx.arc(3, 4, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(13, 4, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // Connection dots
+  rect(ctx, 4, 12, 2, 2, C.white);
+  rect(ctx, 6, 13, 2, 2, C.white);
+  return c;
+}
+
+/**
+ * Draw Desk object (32×32).
+ */
+function drawDesk() {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+  // Desktop
+  rect(ctx, 4, 8, 24, 12, C.deskWood);
+  // Front panel
+  rect(ctx, 4, 20, 24, 8, C.deskWoodDark);
+  // Legs
+  rect(ctx, 6, 28, 3, 4, C.shoe);
+  rect(ctx, 23, 28, 3, 4, C.shoe);
+  return c;
+}
+
+/**
+ * Draw Office Chair (32×32).
+ */
+function drawChair() {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+  // Seat
+  rect(ctx, 8, 12, 16, 6, C.chairBlue);
+  // Back
+  rect(ctx, 10, 4, 12, 10, C.chairBlue);
+  // Base/legs (wheels)
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const x = 16 + Math.cos(angle) * 6;
+    const y = 24 + Math.sin(angle) * 3;
+    px(ctx, Math.round(x), Math.round(y), C.metalGray);
+  }
+  return c;
+}
+
+/**
+ * Draw Table (32x32, top-down view).
+ */
+function drawTable() {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+  // Table top (wood)
+  rect(ctx, 4, 4, 24, 24, C.tableWood);
+  // Shadow/depth
+  hline(ctx, 4, 28, 24, C.deskWoodDark);
+  // Legs (4 corners suggested)
+  rect(ctx, 6, 2, 3, 2, C.shoe);
+  rect(ctx, 23, 2, 3, 2, C.shoe);
+  rect(ctx, 6, 28, 3, 2, C.shoe);
+  rect(ctx, 23, 28, 3, 2, C.shoe);
+  return c;
+}
+
+/**
+ * Draw Whiteboard (wide: 48×32).
+ */
+function drawWhiteboard() {
+  const c = makeCanvas(48, 32);
+  const ctx = c.getContext('2d');
+  // Frame
+  rect(ctx, 1, 1, 46, 30, C.metalDark);
+  // Writing surface
+  rect(ctx, 3, 3, 42, 26, C.whiteboardWhite);
+  // Some random "writing"
+  ctx.strokeStyle = C.black;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(8, 10);
+  ctx.lineTo(22, 15);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(8, 18);
+  ctx.lineTo(20, 22);
+  ctx.stroke();
+  return c;
+}
+
+/**
+ * Draw Water Cooler (narrow: 16×32).
+ */
+function drawWaterCooler() {
+  const c = makeCanvas(16, 32);
+  const ctx = c.getContext('2d');
+  // Body
+  rect(ctx, 2, 2, 12, 20, C.metalGray);
+  // Top (water bottle)
+  rect(ctx, 4, 0, 8, 4, C.lightGray);
+  // Cup dispenser
+  rect(ctx, 5, 20, 6, 6, C.white);
+  // Base
+  rect(ctx, 1, 28, 14, 4, C.metalDark);
+  return c;
+}
+
+/**
+ * Draw Bookshelf (32×48).
+ */
+function drawBookshelf() {
+  const c = makeCanvas(32, 48);
+  const ctx = c.getContext('2d');
+  // Frame
+  rect(ctx, 0, 0, 32, 48, C.deskWoodDark);
+  // Shelves
+  hline(ctx, 1, 12, 30, C.deskWood);
+  hline(ctx, 1, 24, 30, C.deskWood);
+  hline(ctx, 1, 36, 30, C.deskWood);
+  // Books (colorful spines)
+  rect(ctx, 2, 2, 3, 10, '#ff6b6b');
+  rect(ctx, 6, 2, 3, 10, '#4ecdc4');
+  rect(ctx, 10, 2, 3, 10, '#45b7d1');
+  rect(ctx, 14, 2, 3, 10, '#f9ca24');
+  rect(ctx, 2, 14, 3, 10, '#6c5ce7');
+  rect(ctx, 6, 14, 3, 10, '#a29bfe');
+  return c;
+}
+
+/**
+ * Draw Plant in pot (16×32).
+ */
+function drawPlant() {
+  const c = makeCanvas(16, 32);
+  const ctx = c.getContext('2d');
+  // Pot
+  rect(ctx, 3, 20, 10, 10, C.plantPot);
+  rect(ctx, 2, 22, 12, 2, C.plantPot);
+  // Soil
+  rect(ctx, 4, 20, 8, 2, C.coffeeBlack);
+  // Plant leaves
+  ctx.fillStyle = C.plantGreen;
+  ctx.beginPath();
+  ctx.ellipse(8, 12, 3, 6, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(6, 8, 2, 5, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(10, 8, 2, 5, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  return c;
+}
+
+/**
+ * Draw Filing Cabinet (16×32).
+ */
+function drawFilingCabinet() {
+  const c = makeCanvas(16, 32);
+  const ctx = c.getContext('2d');
+  // Body
+  rect(ctx, 1, 0, 14, 32, C.metalGray);
+  // Drawers
+  hline(ctx, 2, 10, 12, C.metalDark);
+  hline(ctx, 2, 20, 12, C.metalDark);
+  // Handles
+  px(ctx, 7, 5, C.metalDark);
+  px(ctx, 7, 15, C.metalDark);
+  px(ctx, 7, 25, C.metalDark);
+  return c;
+}
+
+/**
+ * Draw Trash Can (16×16).
+ */
+function drawTrashCan() {
+  const c = makeCanvas(16, 16);
+  const ctx = c.getContext('2d');
+  // Body
+  rect(ctx, 2, 2, 12, 11, C.metalGray);
+  // Top rim
+  rect(ctx, 1, 1, 14, 2, C.metalDark);
+  // Lid
+  rect(ctx, 3, 0, 10, 2, C.metalDark);
+  return c;
+}
+
+/**
+ * Draw Door (32×32).
+ */
+function drawDoor() {
+  const c = makeCanvas();
+  const ctx = c.getContext('2d');
+  // Frame
+  rect(ctx, 0, 0, 32, 32, C.wallMid);
+  // Door panel
+  rect(ctx, 2, 2, 28, 28, C.doorBrown);
+  // Handle
+  rect(ctx, 26, 14, 3, 3, C.metalGray);
+  // Window (small)
+  rect(ctx, 10, 8, 12, 12, C.lightGray);
+  return c;
+}
+
 // ── Register all textures ────────────────────────────────────────────────────
 
 const AGENTS = {
@@ -491,6 +877,17 @@ export function registerAll(scene) {
   // Furniture
   scene.textures.addCanvas('coffee_machine', drawCoffeeMachine());
   scene.textures.addCanvas('couch_64x32', drawCouch64());
+  scene.textures.addCanvas('desk', drawDesk());
+  scene.textures.addCanvas('chair', drawChair());
+  scene.textures.addCanvas('table', drawTable());
+  scene.textures.addCanvas('whiteboard', drawWhiteboard());
+  scene.textures.addCanvas('water_cooler', drawWaterCooler());
+  scene.textures.addCanvas('bookshelf', drawBookshelf());
+  scene.textures.addCanvas('plant', drawPlant());
+  scene.textures.addCanvas('filing_cabinet', drawFilingCabinet());
+  scene.textures.addCanvas('trash_can', drawTrashCan());
+  scene.textures.addCanvas('door', drawDoor());
+  scene.textures.addCanvas('thought_bubble', drawThoughtBubble());
 
   // Legacy workstation sprites (kept for backward compatibility)
   scene.textures.addCanvas('workstation_deployer', (() => {
@@ -552,16 +949,31 @@ export function registerAll(scene) {
     scene.textures.addCanvas(`agent_${name}_work1`, drawAgentTyping(pal.body, pal.dark, pal.hair, 1));
     scene.textures.addCanvas(`agent_${name}_work2`, drawAgentTyping(pal.body, pal.dark, pal.hair, 2));
 
-    // Coffee
+    // Coffee (reaching and drinking)
     scene.textures.addCanvas(`agent_${name}_coffee0`, drawAgentWithCoffee(pal.body, pal.dark, pal.hair, 0));
+    scene.textures.addCanvas(`agent_${name}_coffee_reach0`, drawAgentReachingCoffee(pal.body, pal.dark, pal.hair, 0));
+    scene.textures.addCanvas(`agent_${name}_coffee_reach1`, drawAgentReachingCoffee(pal.body, pal.dark, pal.hair, 1));
 
-    // Couch
+    // Couch (sitting, sitting down, getting up)
     scene.textures.addCanvas(`agent_${name}_couch0`, drawAgentOnCouch(pal.body, pal.dark, pal.hair, 0));
+    scene.textures.addCanvas(`agent_${name}_sit_down0`, drawAgentSittingDown(pal.body, pal.dark, pal.hair, 0));
+    scene.textures.addCanvas(`agent_${name}_sit_down1`, drawAgentSittingDown(pal.body, pal.dark, pal.hair, 1));
+    scene.textures.addCanvas(`agent_${name}_sit_down2`, drawAgentSittingDown(pal.body, pal.dark, pal.hair, 2));
+    scene.textures.addCanvas(`agent_${name}_get_up0`, drawAgentGettingUp(pal.body, pal.dark, pal.hair, 0));
+    scene.textures.addCanvas(`agent_${name}_get_up1`, drawAgentGettingUp(pal.body, pal.dark, pal.hair, 1));
 
-    // Talking
+    // Talking/Conversation
     scene.textures.addCanvas(`agent_${name}_talk0`, drawAgentTalking(pal.body, pal.dark, pal.hair, 0));
     scene.textures.addCanvas(`agent_${name}_talk1`, drawAgentTalking(pal.body, pal.dark, pal.hair, 1));
     scene.textures.addCanvas(`agent_${name}_talk2`, drawAgentTalking(pal.body, pal.dark, pal.hair, 2));
+
+    // Whiteboard
+    scene.textures.addCanvas(`agent_${name}_write0`, drawAgentWriting(pal.body, pal.dark, pal.hair, 0));
+    scene.textures.addCanvas(`agent_${name}_write1`, drawAgentWriting(pal.body, pal.dark, pal.hair, 1));
+
+    // Error/Stress
+    scene.textures.addCanvas(`agent_${name}_error0`, drawAgentError(pal.body, pal.dark, pal.hair, 0));
+    scene.textures.addCanvas(`agent_${name}_error1`, drawAgentError(pal.body, pal.dark, pal.hair, 1));
 
     // Success
     scene.textures.addCanvas(`agent_${name}_success0`, drawAgentSuccess(pal.body, pal.dark, pal.hair, 0));
@@ -631,6 +1043,57 @@ export function registerAnimations(scene) {
       ],
       frameRate: 8,
       repeat: 2,
+    });
+
+    scene.anims.create({
+      key: `${name}_coffee_reach`,
+      frames: [
+        { key: `agent_${name}_coffee_reach0` },
+        { key: `agent_${name}_coffee_reach1` },
+      ],
+      frameRate: 4,
+      repeat: 0,
+    });
+
+    scene.anims.create({
+      key: `${name}_sit_down`,
+      frames: [
+        { key: `agent_${name}_sit_down0` },
+        { key: `agent_${name}_sit_down1` },
+        { key: `agent_${name}_sit_down2` },
+      ],
+      frameRate: 4,
+      repeat: 0,
+    });
+
+    scene.anims.create({
+      key: `${name}_get_up`,
+      frames: [
+        { key: `agent_${name}_get_up0` },
+        { key: `agent_${name}_get_up1` },
+      ],
+      frameRate: 4,
+      repeat: 0,
+    });
+
+    scene.anims.create({
+      key: `${name}_write`,
+      frames: [
+        { key: `agent_${name}_write0` },
+        { key: `agent_${name}_write1` },
+      ],
+      frameRate: 6,
+      repeat: -1,
+    });
+
+    scene.anims.create({
+      key: `${name}_error`,
+      frames: [
+        { key: `agent_${name}_error0` },
+        { key: `agent_${name}_error1` },
+      ],
+      frameRate: 4,
+      repeat: -1,
     });
   }
 }

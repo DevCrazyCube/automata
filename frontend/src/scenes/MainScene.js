@@ -5,7 +5,9 @@
 
 import Phaser from 'phaser';
 import Agent from '../classes/Agent.js';
-import { registerAll } from '../classes/SpriteFactory.js';
+import { registerAll, registerAnimations } from '../classes/SpriteFactory.js';
+import OfficeEnvironment from '../classes/OfficeEnvironment.js';
+import IdleBehavior from '../classes/IdleBehavior.js';
 import socket from '../services/socketService.js';
 
 export const WORLD_WIDTH  = 800;
@@ -124,6 +126,7 @@ class MainScene extends Phaser.Scene {
     this.agents   = {};   // key → Agent instance
     this.zones    = {};   // key → { x, y, width, height } logical zone
     this.handlers = [];   // socket handler refs for cleanup
+    this.office   = null; // OfficeEnvironment instance
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -134,55 +137,30 @@ class MainScene extends Phaser.Scene {
   }
 
   create() {
+    registerAnimations(this);
+
     this._buildOffice();
     this._buildAgents();
+    this._setupIdleBehaviors();
     this._bindSocketHandlers();
 
     // Socket cleanup on scene shutdown (supports HMR).
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this._unbindSocketHandlers());
     this.events.on(Phaser.Scenes.Events.DESTROY,  () => this._unbindSocketHandlers());
+
+    // Smooth camera follow on active agent
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   }
 
   // ── Office world construction ───────────────────────────────────────────────
 
   _buildOffice() {
+    // Create office environment with tilemap and furniture
+    this.office = new OfficeEnvironment(this);
+    this.office.build();
+
+    // Add title at top
     const W = WORLD_WIDTH;
-    const H = WORLD_HEIGHT;
-
-    // ── Floor tiles (tiled 32×32 across whole canvas) ──
-    for (let ty = 0; ty < H; ty += 32) {
-      for (let tx = 0; tx < W; tx += 32) {
-        this.add.image(tx + 16, ty + 16, 'floor_tile').setOrigin(0.5, 0.5);
-      }
-    }
-
-    // ── Top wall strip ──
-    for (let tx = 0; tx < W; tx += 32) {
-      this.add.image(tx + 16, 16, 'wall_tile').setOrigin(0.5, 0.5);
-    }
-
-    // ── Subtle vignette overlay ──
-    const vignette = this.add.graphics();
-    const gradSteps = 6;
-    for (let i = gradSteps; i >= 0; i--) {
-      const alpha = (1 - i / gradSteps) * 0.18;
-      const margin = i * (Math.min(W, H) / gradSteps / 2);
-      vignette.fillStyle(0x000010, alpha);
-      vignette.fillRect(0, 0, W, margin);
-      vignette.fillRect(0, H - margin, W, margin);
-      vignette.fillRect(0, 0, margin, H);
-      vignette.fillRect(W - margin, 0, margin, H);
-    }
-
-    // ── Central corridor divider lines ──
-    const cx = W / 2;
-    const cy = H / 2;
-    const lineGfx = this.add.graphics();
-    lineGfx.lineStyle(1, 0x1e293b, 0.6);
-    lineGfx.lineBetween(cx, 32, cx, H);
-    lineGfx.lineBetween(0, cy, W, cy);
-
-    // ── Office "AUTOMATA" sign on wall ──
     this.add.text(W / 2, 10, '◈  AUTOMATA  DEFI OPERATIONS CENTER  ◈', {
       fontSize: '10px',
       color: '#00aaff',
@@ -190,75 +168,55 @@ class MainScene extends Phaser.Scene {
       fontStyle: 'bold',
       stroke: '#001433',
       strokeThickness: 3,
-    }).setOrigin(0.5, 0.5);
+    }).setOrigin(0.5, 0.5).setDepth(100);
 
-    // ── Workstations ──
-    for (const [stKey, st] of Object.entries(STATIONS)) {
-      this._buildWorkstation(stKey, st);
+    // Subtle vignette overlay
+    const H = WORLD_HEIGHT;
+    const vignette = this.add.graphics();
+    const gradSteps = 6;
+    for (let i = gradSteps; i >= 0; i--) {
+      const alpha = (1 - i / gradSteps) * 0.1;
+      const margin = i * (Math.min(W, H) / gradSteps / 2);
+      vignette.fillStyle(0x000010, alpha);
+      vignette.fillRect(0, 0, W, margin);
+      vignette.fillRect(0, H - margin, W, margin);
+      vignette.fillRect(0, 0, margin, H);
+      vignette.fillRect(W - margin, 0, margin, H);
     }
-  }
-
-  _buildWorkstation(stKey, st) {
-    const { wsX, wsY, key, label, subLabel, tint } = st;
-
-    // Background panel
-    const panelW = 160;
-    const panelH = 130;
-    const panel = this.add.rectangle(wsX, wsY, panelW, panelH, 0x0d1b2e, 0.85)
-      .setStrokeStyle(1, 0x1e3a5f);
-
-    // Coloured top accent bar
-    const hexStr = '#' + tint.toString(16).padStart(6, '0');
-    this.add.rectangle(wsX, wsY - panelH / 2 + 3, panelW, 5, tint, 0.8);
-
-    // Zone label
-    this.add.text(wsX, wsY - panelH / 2 + 12, label, {
-      fontSize: '9px',
-      color: hexStr,
-      fontFamily: 'monospace',
-      fontStyle: 'bold',
-      stroke: '#000010',
-      strokeThickness: 2,
-    }).setOrigin(0.5, 0);
-
-    // Sub-label
-    this.add.text(wsX, wsY - panelH / 2 + 23, subLabel, {
-      fontSize: '8px',
-      color: '#64748b',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5, 0);
-
-    // Workstation sprite (drawn at 2.5× pixel scale)
-    this.add.image(wsX, wsY + 10, key)
-      .setScale(2.5)
-      .setOrigin(0.5, 0.5);
-
-    // Corner LED dots
-    const ledOffsets = [[-panelW / 2 + 4, -panelH / 2 + 4], [panelW / 2 - 4, -panelH / 2 + 4]];
-    for (const [lx, ly] of ledOffsets) {
-      this.add.circle(wsX + lx, wsY + ly, 2, tint, 0.9);
-    }
-
-    // Register logical zone (agents walk to zone centre)
-    this.zones[stKey] = {
-      x:      wsX - panelW / 2,
-      y:      wsY - panelH / 2,
-      width:  panelW,
-      height: panelH,
-    };
+    vignette.setDepth(99);
   }
 
   // ── Agent initialisation ────────────────────────────────────────────────────
 
   _buildAgents() {
-    for (const [stKey, st] of Object.entries(STATIONS)) {
-      const { wsX, wsY } = st;
-      // Agents start slightly in front of their workstation
-      const agentY = wsY + 70;
+    // Place 4 agents at desks in the office
+    const agentPositions = {
+      deployer:    { x: 80, y: 180 },
+      distributor: { x: 250, y: 180 },
+      swapper:     { x: 80, y: 350 },
+      extractor:   { x: 250, y: 350 },
+    };
+
+    const agentConfigs = {
+      deployer:    { name: 'Deployer',    tint: 0xff5555 },
+      distributor: { name: 'Distributor', tint: 0x44ddcc },
+      swapper:     { name: 'Swapper',     tint: 0xffdd44 },
+      extractor:   { name: 'Extractor',   tint: 0x88eedd },
+    };
+
+    for (const [stKey, pos] of Object.entries(agentPositions)) {
+      const config = agentConfigs[stKey];
       this.agents[stKey] = new Agent(
-        this, wsX, agentY,
-        st.name, st.agentKey, st.tint
+        this, pos.x, pos.y,
+        config.name, stKey, config.tint
       );
+    }
+  }
+
+  _setupIdleBehaviors() {
+    // Create idle behavior for each agent
+    for (const [stKey, agent] of Object.entries(this.agents)) {
+      agent.idleBehavior = new IdleBehavior(agent, this.office.interactiveObjects);
     }
   }
 
@@ -366,6 +324,34 @@ class MainScene extends Phaser.Scene {
     on('operation_stopped', () => {
       for (const agent of Object.values(this.agents)) {
         agent.reset();
+      }
+    });
+
+    // ── Advanced animation events ──
+
+    on('agent_thinking', (data) => {
+      const stKey = resolveStationKey(data.agent || data.agentId);
+      const agent = this.agents[stKey];
+      if (agent) {
+        agent.setChatText('💭 Thinking…');
+      }
+    });
+
+    on('agent_reasoning', (data) => {
+      const stKey = resolveStationKey(data.agent || data.agentId);
+      const agent = this.agents[stKey];
+      if (agent && data.text) {
+        const snippet = String(data.text).slice(0, 50);
+        agent.setChatText(snippet);
+      }
+    });
+
+    on('agent_error', (data) => {
+      const stKey = resolveStationKey(data.agent);
+      const agent = this.agents[stKey];
+      if (agent) {
+        agent.setChatText('⚠ Error');
+        if (agent.idleBehavior) agent.idleBehavior.pause();
       }
     });
   }
