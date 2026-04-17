@@ -6,7 +6,11 @@
 
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
-import MainScene, { WORLD_WIDTH, WORLD_HEIGHT } from './MainScene.js';
+import MainScene from './MainScene.js';
+
+// Fixed canvas dimensions (office is rendered within this, scaled by camera)
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 600;
 
 function PhaserScene({ onGameReady }) {
   const containerRef = useRef(null);
@@ -22,8 +26,8 @@ function PhaserScene({ onGameReady }) {
 
     const config = {
       type: Phaser.CANVAS,       // Force CANVAS — avoids WebGL context-loss flicker on resize.
-      width: WORLD_WIDTH,
-      height: WORLD_HEIGHT,
+      width: CANVAS_WIDTH,
+      height: CANVAS_HEIGHT,
       parent: containerRef.current,
       backgroundColor: '#0f172a',
       scene: [MainScene],

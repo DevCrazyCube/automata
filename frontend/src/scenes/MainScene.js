@@ -20,6 +20,9 @@ export const setWorldDimensions = (w, h) => {
   WORLD_HEIGHT = h;
 };
 
+// Export for external use (though canvas uses fixed dimensions)
+export const getWorldDimensions = () => ({ width: WORLD_WIDTH, height: WORLD_HEIGHT });
+
 // Workstation layout constants
 const PAD   = 24;
 const WS_W  = 80;   // workstation sprite is drawn at 2.5× scale → 80px rendered
