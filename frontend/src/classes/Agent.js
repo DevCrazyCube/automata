@@ -54,19 +54,19 @@ export default class Agent {
     this.container = scene.add.container(x, y);
     this.container.setDepth(20);
 
-    // Debug: Add a colored rectangle if sprite doesn't load
-    let spriteObj = null;
-    const spriteKey = `agent_${agentKey}_idle`;
+    // Sprite using pixel-agents character PNG assets
+    const spriteKey = `agent_${agentKey}`;
 
+    // Try to use loaded PNG sprite, fallback to placeholder
     if (scene.textures.exists(spriteKey)) {
       this.sprite = scene.add.image(0, 0, spriteKey);
       this.sprite.setOrigin(0.5, 0.5);
-      spriteObj = this.sprite;
+      this.sprite.setDisplaySize(32, 64); // Standard character size
     } else {
-      console.warn(`Sprite key not found: ${spriteKey}, creating placeholder rectangle`);
-      spriteObj = scene.add.rectangle(0, 0, 24, 28, tint, 0.9);
-      spriteObj.setOrigin(0.5, 0.5);
-      this.sprite = spriteObj;
+      // Fallback: colored rectangle
+      this.sprite = scene.add.rectangle(0, 0, 16, 24, tint, 0.9);
+      this.sprite.setOrigin(0.5, 0.5);
+      console.warn(`Sprite not loaded: ${spriteKey}, using placeholder`);
     }
 
     // Name label
@@ -106,17 +106,15 @@ export default class Agent {
     this.shadow = scene.add.ellipse(0, 14, 18, 6, 0x000020, 0.4);
 
     // Add children to container in draw order
-    if (spriteObj) {
-      this.container.add([
-        this.shadow,
-        spriteObj,
-        this.label,
-        this.progressBg,
-        this.progressFill,
-        this.bubbleBg,
-        this.bubbleText,
-      ]);
-    }
+    this.container.add([
+      this.shadow,
+      this.sprite,
+      this.label,
+      this.progressBg,
+      this.progressFill,
+      this.bubbleBg,
+      this.bubbleText,
+    ]);
 
     // Start idle patrol immediately
     this._schedulePatrol();
@@ -245,6 +243,12 @@ export default class Agent {
   _setSprite(key) {
     if (this.scene.textures.exists(key)) {
       this.sprite.setTexture(key);
+    } else {
+      // Fall back to base agent sprite if animation frame not found
+      const baseKey = `agent_${this.agentKey}`;
+      if (this.scene.textures.exists(baseKey)) {
+        this.sprite.setTexture(baseKey);
+      }
     }
   }
 

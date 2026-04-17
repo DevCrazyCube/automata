@@ -13,21 +13,23 @@ export default class IdleBehavior {
     this.timers = {};
   }
 
-  // Call from Agent._schedulePatrol() or whenever agent goes idle
-  update() {
+  // Call from Agent update() every frame - prevents freezing
+  update(time) {
     if (!this.isActive || !this.agent) return;
+    if (this.agent.state !== 'idle' && this.agent.state !== 'patrolling') return;
 
     const now = Date.now();
     if (now < this.nextActionTime) return;
 
-    // Random chance (30%) to trigger idle behavior
-    if (Math.random() > 0.3) {
-      this.nextActionTime = now + 5000; // Check again in 5s
+    // Random chance (25%) to trigger an idle behavior
+    if (Math.random() > 0.25) {
+      this.nextActionTime = now + 3000; // Check again in 3s
       return;
     }
 
     this._chooseIdleAction();
-    this.nextActionTime = now + Phaser.Math.Between(30000, 90000);
+    // Schedule next action in 30-60 seconds
+    this.nextActionTime = now + Phaser.Math.Between(30000, 60000);
   }
 
   _chooseIdleAction() {

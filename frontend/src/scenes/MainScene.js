@@ -134,11 +134,13 @@ class MainScene extends Phaser.Scene {
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
   preload() {
-    // Register all programmatic textures before create().
-    registerAll(this);
+    // Register all textures (sprites and animations)
+    // Note: registerAll is now async, so we'll load in create
   }
 
   create() {
+    // Load pixel-agents sprites and set up animations
+    registerAll(this);
     registerAnimations(this);
 
     this._buildOffice();
@@ -166,16 +168,14 @@ class MainScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    // Isometric view: rotate and scale for top-down isometric perspective
-    cam.setScroll(0, 0);
-    cam.setOrigin(0.5, 0.5);
-    cam.setZoom(1.2); // Slightly zoomed for better visibility
+    // Pixel-agents style camera: clean top-down view with smooth follow
+    cam.setZoom(1.5); // Zoom level for office visibility
+    cam.setLerp(0.08, 0.08); // Smooth camera follow
 
-    // Center on first agent with smooth follow
+    // Center on first agent with smooth movement
     const firstAgent = Object.values(this.agents)[0];
     if (firstAgent) {
       cam.startFollow(firstAgent.container, true);
-      cam.setLerp(0.1, 0.1);
     }
   }
 
