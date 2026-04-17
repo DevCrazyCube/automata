@@ -248,37 +248,32 @@ class MainScene extends Phaser.Scene {
     on('phase_started', (data) => {
       const stKey = resolveStationKey(data.agent) || ZONE_MAP[data.zone];
       const agent = this.agents[stKey];
-      const zone  = this.zones[stKey || ZONE_MAP[data.zone]];
-      if (agent && zone) agent.walkToZone(zone);
-    });
-
-    on('agent_walking', (data) => {
-      const stKey = resolveStationKey(data.agent);
-      const destKey = ZONE_MAP[data.destination] || resolveStationKey(data.destination) || data.destination;
-      const agent = this.agents[stKey];
-      const zone  = this.zones[destKey];
-      if (agent && zone) agent.walkToZone(zone);
+      if (agent && agent.idleBehavior) agent.idleBehavior.pause();
     });
 
     on('agent_working', (data) => {
       const stKey = resolveStationKey(data.agent);
       const agent = this.agents[stKey];
-      if (agent) agent.startWorking(data.action, data.progress || 0);
+      if (agent) {
+        agent.startWorking(data.action, data.progress || 0);
+        if (agent.idleBehavior) agent.idleBehavior.pause();
+      }
     });
-
-    // ── New LLM-agent events ─────────────────────────────────────────────────
 
     on('agent_thinking', (data) => {
       const stKey = resolveStationKey(data.agent || data.agentId);
       const agent = this.agents[stKey];
-      if (agent) agent.setChatText('💭 Thinking…');
+      if (agent) {
+        agent.setChatText('💭 Thinking…');
+        if (agent.idleBehavior) agent.idleBehavior.pause();
+      }
     });
 
     on('agent_reasoning', (data) => {
       const stKey = resolveStationKey(data.agent || data.agentId);
       const agent = this.agents[stKey];
       if (agent && data.text) {
-        const snippet = String(data.text).slice(0, 60);
+        const snippet = String(data.text).slice(0, 50);
         agent.setChatText(snippet);
       }
     });
@@ -312,12 +307,13 @@ class MainScene extends Phaser.Scene {
     on('agent_error', (data) => {
       const stKey = resolveStationKey(data.agent);
       const agent = this.agents[stKey];
-      if (agent) agent.setChatText('⚠ Error');
+      if (agent) {
+        agent.setChatText('⚠ Error');
+        if (agent.idleBehavior) agent.idleBehavior.pause();
+      }
     });
 
     on('phase_progress', (data) => {
-      // Update progress bar for the agent whose phase number maps to them.
-      // Phases 1→deployer, 2→distributor, 3→swapper, 4→distributor, 5→extractor, 6→extractor
       const phaseAgentMap = { 1: 'deployer', 2: 'distributor', 3: 'swapper',
                                4: 'distributor', 5: 'extractor', 6: 'extractor' };
       const stKey = phaseAgentMap[data.phase];
@@ -332,43 +328,21 @@ class MainScene extends Phaser.Scene {
     });
 
     on('operation_complete', () => {
-      // All agents celebrate simultaneously
       for (const agent of Object.values(this.agents)) {
         agent.celebrate();
       }
+      // Resume idle behaviors after operation
+      this.time.delayedCall(2000, () => {
+        for (const agent of Object.values(this.agents)) {
+          if (agent.idleBehavior) agent.idleBehavior.resume();
+        }
+      });
     });
 
     on('operation_stopped', () => {
       for (const agent of Object.values(this.agents)) {
         agent.reset();
-      }
-    });
-
-    // ── Advanced animation events ──
-
-    on('agent_thinking', (data) => {
-      const stKey = resolveStationKey(data.agent || data.agentId);
-      const agent = this.agents[stKey];
-      if (agent) {
-        agent.setChatText('💭 Thinking…');
-      }
-    });
-
-    on('agent_reasoning', (data) => {
-      const stKey = resolveStationKey(data.agent || data.agentId);
-      const agent = this.agents[stKey];
-      if (agent && data.text) {
-        const snippet = String(data.text).slice(0, 50);
-        agent.setChatText(snippet);
-      }
-    });
-
-    on('agent_error', (data) => {
-      const stKey = resolveStationKey(data.agent);
-      const agent = this.agents[stKey];
-      if (agent) {
-        agent.setChatText('⚠ Error');
-        if (agent.idleBehavior) agent.idleBehavior.pause();
+        if (agent.idleBehavior) agent.idleBehavior.resume();
       }
     });
   }
