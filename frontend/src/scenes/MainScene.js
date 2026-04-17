@@ -153,7 +153,6 @@ class MainScene extends Phaser.Scene {
       this._setupCamera();
       this._bindSocketHandlers();
     });
-  }
 
     // Socket cleanup on scene shutdown (supports HMR).
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this._unbindSocketHandlers());
