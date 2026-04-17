@@ -133,9 +133,9 @@ class MainScene extends Phaser.Scene {
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-  async preload() {
-    // Register all textures (sprites and animations)
-    await registerAll(this);
+  preload() {
+    // Register sprite loader - loads all assets
+    registerAll(this);
   }
 
   create() {
