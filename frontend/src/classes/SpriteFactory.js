@@ -1,7 +1,7 @@
 // classes/SpriteFactory.js
 // Load pixel-agents PNG assets as Phaser textures
 
-function loadPixelAgentsAssets(scene) {
+async function loadPixelAgentsAssets(scene) {
   // Character sprites - map agents to pixel-agents character indices
   const characterMap = {
     deployer: 0,      // char_0.png
@@ -13,15 +13,32 @@ function loadPixelAgentsAssets(scene) {
   // Load character sprites from PNG assets
   for (const [agentKey, charId] of Object.entries(characterMap)) {
     const path = `assets/characters/char_${charId}.png`;
-    const img = new Image();
-    img.src = path;
-    img.onload = () => {
-      scene.textures.addImage(`agent_${agentKey}`, img);
-    };
-    img.onerror = () => {
-      console.warn(`Failed to load character sprite: ${path}`);
+    try {
+      // Use Phaser's image loader for proper texture registration
+      await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            scene.textures.addImage(`agent_${agentKey}`, img);
+            resolve();
+          } catch (e) {
+            console.warn(`Failed to register character sprite: ${path}`);
+            createFallbackCharacter(scene, agentKey);
+            resolve();
+          }
+        };
+        img.onerror = () => {
+          console.warn(`Failed to load character sprite: ${path}`);
+          createFallbackCharacter(scene, agentKey);
+          resolve();
+        };
+        img.src = path;
+      });
+    } catch (e) {
+      console.warn(`Error loading character sprite: ${path}`, e);
       createFallbackCharacter(scene, agentKey);
-    };
+    }
   }
 
   loadEnvironmentAssets(scene);

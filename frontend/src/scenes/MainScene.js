@@ -133,14 +133,13 @@ class MainScene extends Phaser.Scene {
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-  preload() {
+  async preload() {
     // Register all textures (sprites and animations)
-    // Note: registerAll is now async, so we'll load in create
+    await registerAll(this);
   }
 
   create() {
-    // Load pixel-agents sprites and set up animations
-    registerAll(this);
+    // Set up animations after sprites are loaded
     registerAnimations(this);
 
     this._buildOffice();
