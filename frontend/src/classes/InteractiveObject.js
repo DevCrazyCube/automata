@@ -117,6 +117,11 @@ export default class InteractiveObject {
       agent._setSprite(`agent_${agent.agentKey}_coffee0`);
       agent.setChatText('☕ Sipping coffee');
 
+      // Trigger coffee steam particles if available
+      if (agent.scene.office && agent.scene.office.triggerCoffeeParticles) {
+        agent.scene.office.triggerCoffeeParticles();
+      }
+
       // Sit with coffee for 8 seconds
       this.scene.time.delayedCall(8000, () => {
         this._completeInteraction(agent);

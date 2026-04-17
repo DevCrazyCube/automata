@@ -8,6 +8,7 @@ import Agent from '../classes/Agent.js';
 import { registerAll, registerAnimations } from '../classes/SpriteFactory.js';
 import OfficeEnvironment from '../classes/OfficeEnvironment.js';
 import IdleBehavior from '../classes/IdleBehavior.js';
+import AgentInteraction from '../classes/AgentInteraction.js';
 import socket from '../services/socketService.js';
 
 export const WORLD_WIDTH  = 800;
@@ -127,6 +128,7 @@ class MainScene extends Phaser.Scene {
     this.zones    = {};   // key → { x, y, width, height } logical zone
     this.handlers = [];   // socket handler refs for cleanup
     this.office   = null; // OfficeEnvironment instance
+    this.agentInteraction = null; // AgentInteraction instance
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -142,14 +144,23 @@ class MainScene extends Phaser.Scene {
     this._buildOffice();
     this._buildAgents();
     this._setupIdleBehaviors();
+    this._setupAgentInteraction();
+    this._setupCamera();
     this._bindSocketHandlers();
 
     // Socket cleanup on scene shutdown (supports HMR).
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this._unbindSocketHandlers());
     this.events.on(Phaser.Scenes.Events.DESTROY,  () => this._unbindSocketHandlers());
+  }
 
-    // Smooth camera follow on active agent
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  _setupCamera() {
+    // Center camera on first agent with smooth easing
+    const firstAgent = Object.values(this.agents)[0];
+    if (firstAgent) {
+      this.cameras.main.startFollow(firstAgent.container, true);
+      this.cameras.main.setLerp(0.08, 0.08);
+      this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    }
   }
 
   // ── Office world construction ───────────────────────────────────────────────
@@ -218,6 +229,12 @@ class MainScene extends Phaser.Scene {
     for (const [stKey, agent] of Object.entries(this.agents)) {
       agent.idleBehavior = new IdleBehavior(agent, this.office.interactiveObjects);
     }
+  }
+
+  _setupAgentInteraction() {
+    // Create agent interaction system (proximity-based chat)
+    this.agentInteraction = new AgentInteraction(this, this.agents);
+    this.agentInteraction.start();
   }
 
   // ── Socket event wiring ─────────────────────────────────────────────────────
@@ -359,6 +376,14 @@ class MainScene extends Phaser.Scene {
   _unbindSocketHandlers() {
     this.handlers.forEach(({ event, handler }) => socket.off(event, handler));
     this.handlers = [];
+    if (this.agentInteraction) {
+      this.agentInteraction.destroy();
+      this.agentInteraction = null;
+    }
+    if (this.office) {
+      this.office.destroy();
+      this.office = null;
+    }
   }
 }
 

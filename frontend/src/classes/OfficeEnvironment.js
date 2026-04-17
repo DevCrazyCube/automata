@@ -13,6 +13,7 @@ export default class OfficeEnvironment {
     this.interactiveObjects = {};
     this.floorLayer = null;
     this.wallLayer = null;
+    this.particleEmitters = {};
   }
 
   // Build the office environment
@@ -21,8 +22,71 @@ export default class OfficeEnvironment {
     this._createWalls();
     this._createFurniture();
     this._createInteractiveObjects();
+    this._createParticles();
 
     return this.interactiveObjects;
+  }
+
+  _createParticles() {
+    // Coffee machine steam effect
+    const coffeeEmitter = this.scene.make.particles({
+      speed: { min: -20, max: 20 },
+      angle: { min: 250, max: 290 },
+      scale: { start: 0.3, end: 0 },
+      alpha: { start: 0.5, end: 0 },
+      lifespan: 1200,
+      gravityY: -80,
+    });
+
+    coffeeEmitter.createEmitter({
+      speed: { min: -20, max: 20 },
+      angle: { min: 250, max: 290 },
+      scale: { start: 0.2, end: 0 },
+      alpha: { start: 0.3, end: 0 },
+      lifespan: 1000,
+      gravityY: -100,
+      emitZone: { source: new Phaser.Geom.Circle(550, 180, 10) },
+    });
+
+    coffeeEmitter.start();
+    coffeeEmitter.pause();
+
+    this.particleEmitters.coffee = coffeeEmitter;
+
+    // Whiteboard dust effect (for erasing)
+    const dustEmitter = this.scene.make.particles({
+      speed: { min: -50, max: 50 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.1, end: 0 },
+      alpha: { start: 0.6, end: 0 },
+      lifespan: 800,
+    });
+
+    dustEmitter.createEmitter({
+      speed: { min: -40, max: 40 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.15, end: 0 },
+      alpha: { start: 0.4, end: 0 },
+      lifespan: 600,
+    });
+
+    dustEmitter.pause();
+    this.particleEmitters.whiteboard = dustEmitter;
+  }
+
+  triggerCoffeeParticles() {
+    if (this.particleEmitters.coffee) {
+      this.particleEmitters.coffee.resume();
+      this.scene.time.delayedCall(2000, () => {
+        this.particleEmitters.coffee.pause();
+      });
+    }
+  }
+
+  triggerWhiteboardDust(x, y) {
+    if (this.particleEmitters.whiteboard) {
+      this.particleEmitters.whiteboard.emitParticleAt(x, y, 8);
+    }
   }
 
   _createFloors() {
