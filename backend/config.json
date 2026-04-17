@@ -1,7 +1,11 @@
 {
   "MODE": "simulation",
+  "DRIVER": "agents",
   "NETWORK": "ethereum",
   "RPC_URL": "http://localhost:8545",
+  "AGENT_MODEL": "claude-sonnet-4-6",
+  "AGENT_DECISION_INTERVAL_MS": 500,
+  "AGENT_MAX_ROUNDS": 8,
 
   "DEPLOYER_ADDRESS": "0xf5743d985fedac4Af41761aA5404bDd261e9d44b",
   "ADMIN_WALLET": "0x0aFF194B89bfBb72ae3734890f315a950170af74",

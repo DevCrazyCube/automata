@@ -75,6 +75,49 @@ const ZONE_MAP = {
 /** Map backend agent index (1-4) to station key. */
 const AGENT_IDX_MAP = { 1: 'deployer', 2: 'distributor', 3: 'swapper', 4: 'extractor' };
 
+/** Resolve a station key from any of: numeric id, string key, agent name. */
+function resolveStationKey(input) {
+  if (input == null) return null;
+  if (typeof input === 'number') return AGENT_IDX_MAP[input] || null;
+  if (typeof input === 'string') {
+    const lower = input.toLowerCase();
+    if (STATIONS[lower]) return lower;
+    if (AGENT_IDX_MAP[lower]) return AGENT_IDX_MAP[lower];
+  }
+  return null;
+}
+
+/** Friendly one-line summary of a tool call for the speech bubble. */
+function summarizeAction(tool, input = {}) {
+  switch (tool) {
+    case 'execute_deploy_token':           return 'Deploying token…';
+    case 'execute_mint':                   return `Minting ${formatNum(input.amount)}`;
+    case 'execute_burn':                   return `Burning ${formatNum(input.amount)}`;
+    case 'execute_transfer':               return `Sending ${formatNum(input.amount)}`;
+    case 'execute_add_liquidity':          return 'Seeding LP';
+    case 'execute_remove_liquidity':       return `Pulling ${Math.round((input.lp_fraction || 0) * 100)}% LP`;
+    case 'execute_swap':                   return `Swapping ${formatNum(input.input_amount)}`;
+    case 'execute_forward_stablecoin':     return `Forwarding ${formatNum(input.amount)}`;
+    case 'execute_whitelist':              return input.allow ? 'Whitelisting' : 'Removing whitelist';
+    case 'execute_set_transfer_restrictions': return input.restricted ? 'Locking transfers' : 'Unlocking transfers';
+    case 'check_token_state':              return 'Checking state';
+    case 'check_wallet_balance':           return 'Checking balance';
+    case 'get_market_conditions':          return 'Reading market';
+    case 'get_config':                     return 'Reading config';
+    case 'send_message':                   return `→ ${input.to}: ${(input.message || '').slice(0, 24)}`;
+    case 'read_messages':                  return 'Reading messages';
+    case 'finish_turn':                    return input.done ? 'Done ✓' : 'Yielding';
+    default:                                return tool;
+  }
+}
+
+function formatNum(v) {
+  if (v == null) return '';
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}k`;
+  return String(v);
+}
+
 class MainScene extends Phaser.Scene {
   constructor() {
     super({ key: 'MainScene' });
@@ -228,24 +271,73 @@ class MainScene extends Phaser.Scene {
     };
 
     on('phase_started', (data) => {
-      const stKey = AGENT_IDX_MAP[data.agent] || ZONE_MAP[data.zone];
+      const stKey = resolveStationKey(data.agent) || ZONE_MAP[data.zone];
       const agent = this.agents[stKey];
       const zone  = this.zones[stKey || ZONE_MAP[data.zone]];
       if (agent && zone) agent.walkToZone(zone);
     });
 
     on('agent_walking', (data) => {
-      const stKey = AGENT_IDX_MAP[data.agent];
-      const destKey = ZONE_MAP[data.destination] || data.destination;
+      const stKey = resolveStationKey(data.agent);
+      const destKey = ZONE_MAP[data.destination] || resolveStationKey(data.destination) || data.destination;
       const agent = this.agents[stKey];
       const zone  = this.zones[destKey];
       if (agent && zone) agent.walkToZone(zone);
     });
 
     on('agent_working', (data) => {
-      const stKey = AGENT_IDX_MAP[data.agent];
+      const stKey = resolveStationKey(data.agent);
       const agent = this.agents[stKey];
       if (agent) agent.startWorking(data.action, data.progress || 0);
+    });
+
+    // ── New LLM-agent events ─────────────────────────────────────────────────
+
+    on('agent_thinking', (data) => {
+      const stKey = resolveStationKey(data.agent || data.agentId);
+      const agent = this.agents[stKey];
+      if (agent) agent.setChatText('💭 Thinking…');
+    });
+
+    on('agent_reasoning', (data) => {
+      const stKey = resolveStationKey(data.agent || data.agentId);
+      const agent = this.agents[stKey];
+      if (agent && data.text) {
+        const snippet = String(data.text).slice(0, 60);
+        agent.setChatText(snippet);
+      }
+    });
+
+    on('agent_action', (data) => {
+      const stKey = resolveStationKey(data.agent || data.agentId);
+      const agent = this.agents[stKey];
+      if (agent) {
+        agent.startWorking(summarizeAction(data.tool, data.input || {}), 0);
+      }
+    });
+
+    on('agent_message', (data) => {
+      const stKey = resolveStationKey(data.from);
+      const agent = this.agents[stKey];
+      if (agent && data.message) {
+        const snippet = String(data.message).slice(0, 56);
+        agent.setChatText(`→${data.to}: ${snippet}`);
+      }
+    });
+
+    on('agent_yielded', (data) => {
+      const stKey = resolveStationKey(data.agent);
+      const agent = this.agents[stKey];
+      if (agent) {
+        if (data.done) agent.celebrate();
+        else agent.setChatText('Waiting…');
+      }
+    });
+
+    on('agent_error', (data) => {
+      const stKey = resolveStationKey(data.agent);
+      const agent = this.agents[stKey];
+      if (agent) agent.setChatText('⚠ Error');
     });
 
     on('phase_progress', (data) => {

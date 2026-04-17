@@ -13,6 +13,7 @@ const socketIo = require('socket.io');
 const config = require('./config.json');
 const logger = require('./utils/logger');
 const { runAutomation } = require('./automation-wrapper');
+const AgentOrchestrator = require('./agents/AgentOrchestrator');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
@@ -54,8 +55,29 @@ const io = socketIo(server, {
 const operationState = {
   isRunning: false,
   paused: false,
-  startedAt: null
+  startedAt: null,
+  orchestrator: null   // active AgentOrchestrator instance, if running in agent mode
 };
+
+/**
+ * Resolve which driver to use for an operation.
+ * Priority: configOverride.driver → env DRIVER → config.DRIVER → default
+ *
+ * "agents" requires ANTHROPIC_API_KEY; we transparently fall back to "phases"
+ * if the key is missing, logging a warning so operators know.
+ */
+function resolveDriver(configOverride) {
+  const requested =
+    configOverride.driver ||
+    process.env.DRIVER ||
+    config.DRIVER ||
+    'agents';
+  if (requested === 'agents' && !process.env.ANTHROPIC_API_KEY) {
+    logger.warn('server', 'ANTHROPIC_API_KEY not set — falling back to legacy phase driver');
+    return 'phases';
+  }
+  return requested;
+}
 
 io.on('connection', (socket) => {
   logger.info('socket', `client connected: ${socket.id}`);
@@ -71,13 +93,24 @@ io.on('connection', (socket) => {
     }
     operationState.isRunning = true;
     operationState.startedAt = Date.now();
+    const driver = resolveDriver(configOverride);
+    io.emit('driver_info', { driver });
+    logger.info('server', `starting operation with driver=${driver}`);
+
     try {
-      await runAutomation({ io, configOverride });
+      if (driver === 'agents') {
+        const orchestrator = new AgentOrchestrator({ io, configOverride });
+        operationState.orchestrator = orchestrator;
+        await orchestrator.run();
+      } else {
+        await runAutomation({ io, configOverride });
+      }
     } catch (error) {
       logger.error('socket', `operation failed: ${error.message}`);
     } finally {
       operationState.isRunning = false;
       operationState.paused = false;
+      operationState.orchestrator = null;
     }
   });
 
@@ -94,6 +127,9 @@ io.on('connection', (socket) => {
   socket.on('stop_operation', () => {
     operationState.isRunning = false;
     operationState.paused = false;
+    if (operationState.orchestrator) {
+      operationState.orchestrator.abort();
+    }
     io.emit('operation_stopped', { timestamp: new Date().toISOString() });
   });
 
