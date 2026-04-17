@@ -6,6 +6,7 @@ import InteractiveObject from './InteractiveObject.js';
 
 const WORLD_WIDTH = 800;
 const WORLD_HEIGHT = 600;
+const TILE_SIZE = 32;
 
 export default class OfficeEnvironment {
   constructor(scene) {
@@ -28,191 +29,94 @@ export default class OfficeEnvironment {
   }
 
   _createParticles() {
-    // Coffee machine steam effect
-    const coffeeEmitter = this.scene.make.particles({
-      speed: { min: -20, max: 20 },
-      angle: { min: 250, max: 290 },
-      scale: { start: 0.3, end: 0 },
-      alpha: { start: 0.5, end: 0 },
-      lifespan: 1200,
-      gravityY: -80,
-    });
-
-    coffeeEmitter.createEmitter({
-      speed: { min: -20, max: 20 },
-      angle: { min: 250, max: 290 },
-      scale: { start: 0.2, end: 0 },
-      alpha: { start: 0.3, end: 0 },
-      lifespan: 1000,
-      gravityY: -100,
-      emitZone: { source: new Phaser.Geom.Circle(550, 180, 10) },
-    });
-
-    coffeeEmitter.start();
-    coffeeEmitter.pause();
-
-    this.particleEmitters.coffee = coffeeEmitter;
-
-    // Whiteboard dust effect (for erasing)
-    const dustEmitter = this.scene.make.particles({
-      speed: { min: -50, max: 50 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.1, end: 0 },
-      alpha: { start: 0.6, end: 0 },
-      lifespan: 800,
-    });
-
-    dustEmitter.createEmitter({
-      speed: { min: -40, max: 40 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.15, end: 0 },
-      alpha: { start: 0.4, end: 0 },
-      lifespan: 600,
-    });
-
-    dustEmitter.pause();
-    this.particleEmitters.whiteboard = dustEmitter;
+    // Placeholder for future particle effects
+    // Particle systems require physics to be enabled
   }
 
   triggerCoffeeParticles() {
-    if (this.particleEmitters.coffee) {
-      this.particleEmitters.coffee.resume();
-      this.scene.time.delayedCall(2000, () => {
-        this.particleEmitters.coffee.pause();
-      });
-    }
+    // Particle effect triggered on coffee interaction
   }
 
   triggerWhiteboardDust(x, y) {
-    if (this.particleEmitters.whiteboard) {
-      this.particleEmitters.whiteboard.emitParticleAt(x, y, 8);
-    }
+    // Particle effect triggered on whiteboard write
   }
 
   _createFloors() {
     // Create alternating beige checkerboard floor
-    const tileSize = 32;
-    for (let y = 0; y < WORLD_HEIGHT; y += tileSize) {
-      for (let x = 0; x < WORLD_WIDTH; x += tileSize) {
-        const isCheckerboard = ((x / tileSize) + (y / tileSize)) % 2 === 0;
+    for (let y = 0; y < WORLD_HEIGHT; y += TILE_SIZE) {
+      for (let x = 0; x < WORLD_WIDTH; x += TILE_SIZE) {
+        const isCheckerboard = ((x / TILE_SIZE) + (y / TILE_SIZE)) % 2 === 0;
         const key = isCheckerboard ? 'floor_beige_a' : 'floor_beige_b';
-        this.scene.add.image(x + tileSize / 2, y + tileSize / 2, key)
-          .setOrigin(0.5, 0.5)
-          .setDepth(0);
+        const img = this.scene.add.image(x + TILE_SIZE / 2, y + TILE_SIZE / 2, key);
+        if (img) {
+          img.setOrigin(0.5, 0.5).setDepth(0);
+        }
       }
     }
   }
 
   _createWalls() {
     // Top wall
-    for (let x = 0; x < WORLD_WIDTH; x += 32) {
-      this.scene.add.image(x + 16, 16, 'wall_gray')
-        .setOrigin(0.5, 0.5)
-        .setDepth(5);
-    }
-
-    // Vertical divider at mid-width (separate main office and break room)
-    for (let y = 0; y < WORLD_HEIGHT; y += 32) {
-      if (y > 60) { // Skip wall after top area
-        this.scene.add.image(WORLD_WIDTH / 2, y + 16, 'wall_gray')
-          .setOrigin(0.5, 0.5)
-          .setDepth(5);
+    for (let x = 0; x < WORLD_WIDTH; x += TILE_SIZE) {
+      const img = this.scene.add.image(x + TILE_SIZE / 2, TILE_SIZE / 2, 'wall_gray');
+      if (img) {
+        img.setOrigin(0.5, 0.5).setDepth(5);
       }
     }
 
-    // Horizontal divider at 60% height (separate work area and break area)
-    for (let x = 0; x < WORLD_WIDTH / 2; x += 32) {
-      this.scene.add.image(x + 16, WORLD_HEIGHT * 0.65, 'wall_gray')
-        .setOrigin(0.5, 0.5)
-        .setDepth(5);
+    // Vertical divider at mid-width
+    for (let y = TILE_SIZE; y < WORLD_HEIGHT; y += TILE_SIZE) {
+      const img = this.scene.add.image(WORLD_WIDTH / 2, y + TILE_SIZE / 2, 'wall_gray');
+      if (img) {
+        img.setOrigin(0.5, 0.5).setDepth(5);
+      }
+    }
+
+    // Horizontal divider at 60% height
+    for (let x = 0; x < WORLD_WIDTH / 2; x += TILE_SIZE) {
+      const img = this.scene.add.image(x + TILE_SIZE / 2, WORLD_HEIGHT * 0.65, 'wall_gray');
+      if (img) {
+        img.setOrigin(0.5, 0.5).setDepth(5);
+      }
     }
   }
 
   _createFurniture() {
-    // Agent desks (left side)
-    this.scene.add.image(80, 150, 'desk')
-      .setOrigin(0.5, 0.5)
-      .setScale(1.5)
-      .setDepth(8);
-    this.scene.add.image(80, 150, 'chair')
-      .setOrigin(0.5, 0.5)
-      .setScale(1.0)
-      .setDepth(8);
+    const furniture = [
+      // Agent desks (left side)
+      { x: 80, y: 150, key: 'desk', scale: 1.5, depth: 8 },
+      { x: 80, y: 150, key: 'chair', scale: 1.0, depth: 8 },
+      { x: 250, y: 150, key: 'desk', scale: 1.5, depth: 8 },
+      { x: 250, y: 150, key: 'chair', scale: 1.0, depth: 8 },
+      // Break room furniture (right side)
+      { x: 550, y: 200, key: 'coffee_machine', scale: 2.0, depth: 8 },
+      { x: 550, y: 350, key: 'table', scale: 2.0, depth: 8 },
+      { x: 550, y: 480, key: 'couch_64x32', scale: 2.0, depth: 8 },
+      { x: 100, y: 400, key: 'whiteboard', scale: 1.8, depth: 6 },
+      { x: 750, y: 500, key: 'water_cooler', scale: 2.0, depth: 8 },
+      { x: 50, y: 500, key: 'bookshelf', scale: 1.5, depth: 8 },
+      { x: 700, y: 100, key: 'plant', scale: 1.5, depth: 8 },
+      { x: 300, y: 500, key: 'filing_cabinet', scale: 1.5, depth: 8 },
+      { x: 750, y: 50, key: 'trash_can', scale: 2.0, depth: 8 },
+    ];
 
-    this.scene.add.image(250, 150, 'desk')
-      .setOrigin(0.5, 0.5)
-      .setScale(1.5)
-      .setDepth(8);
-    this.scene.add.image(250, 150, 'chair')
-      .setOrigin(0.5, 0.5)
-      .setScale(1.0)
-      .setDepth(8);
-
-    // Break room furniture (right side)
-    // Coffee machine
-    this.scene.add.image(550, 200, 'coffee_machine')
-      .setOrigin(0.5, 0.5)
-      .setScale(2.0)
-      .setDepth(8);
-
-    // Break room table (center)
-    this.scene.add.image(550, 350, 'table')
-      .setOrigin(0.5, 0.5)
-      .setScale(2.0)
-      .setDepth(8);
+    for (const item of furniture) {
+      if (this.scene.textures.exists(item.key)) {
+        const img = this.scene.add.image(item.x, item.y, item.key);
+        img.setOrigin(0.5, 0.5).setScale(item.scale).setDepth(item.depth);
+      }
+    }
 
     // Chairs around table
     for (let i = 0; i < 4; i++) {
-      const angle = (i / 4) * Math.PI * 2;
-      const x = 550 + Math.cos(angle) * 70;
-      const y = 350 + Math.sin(angle) * 60;
-      this.scene.add.image(x, y, 'chair')
-        .setOrigin(0.5, 0.5)
-        .setScale(0.8)
-        .setDepth(8);
+      if (this.scene.textures.exists('chair')) {
+        const angle = (i / 4) * Math.PI * 2;
+        const x = 550 + Math.cos(angle) * 70;
+        const y = 350 + Math.sin(angle) * 60;
+        const img = this.scene.add.image(x, y, 'chair');
+        img.setOrigin(0.5, 0.5).setScale(0.8).setDepth(8);
+      }
     }
-
-    // Couch (lower right)
-    this.scene.add.image(550, 480, 'couch_64x32')
-      .setOrigin(0.5, 0.5)
-      .setScale(2.0)
-      .setDepth(8);
-
-    // Whiteboard (left side lower)
-    this.scene.add.image(100, 400, 'whiteboard')
-      .setOrigin(0.5, 0.5)
-      .setScale(1.8)
-      .setDepth(6);
-
-    // Water cooler (right side corner)
-    this.scene.add.image(750, 500, 'water_cooler')
-      .setOrigin(0.5, 0.5)
-      .setScale(2.0)
-      .setDepth(8);
-
-    // Bookshelf (left side corner)
-    this.scene.add.image(50, 500, 'bookshelf')
-      .setOrigin(0.5, 0.5)
-      .setScale(1.5)
-      .setDepth(8);
-
-    // Plant (decorative)
-    this.scene.add.image(700, 100, 'plant')
-      .setOrigin(0.5, 0.5)
-      .setScale(1.5)
-      .setDepth(8);
-
-    // Filing cabinet
-    this.scene.add.image(300, 500, 'filing_cabinet')
-      .setOrigin(0.5, 0.5)
-      .setScale(1.5)
-      .setDepth(8);
-
-    // Trash can (corner)
-    this.scene.add.image(750, 50, 'trash_can')
-      .setOrigin(0.5, 0.5)
-      .setScale(2.0)
-      .setDepth(8);
   }
 
   _createInteractiveObjects() {

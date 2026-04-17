@@ -12,7 +12,7 @@ import AgentInteraction from '../classes/AgentInteraction.js';
 import socket from '../services/socketService.js';
 
 export const WORLD_WIDTH  = 800;
-export const WORLD_HEIGHT = 540;
+export const WORLD_HEIGHT = 600;
 
 // Workstation layout constants
 const PAD   = 24;

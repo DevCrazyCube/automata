@@ -54,8 +54,16 @@ export default class Agent {
     this.container = scene.add.container(x, y);
 
     // Sprite (32×32, centred on container origin)
-    this.sprite = scene.add.image(0, 0, `agent_${agentKey}_idle`);
+    const spriteKey = `agent_${agentKey}_idle`;
+    this.sprite = scene.add.image(0, 0, spriteKey);
     this.sprite.setOrigin(0.5, 0.5);
+
+    // Fallback if sprite doesn't exist
+    if (!scene.textures.exists(spriteKey)) {
+      console.warn(`Sprite key not found: ${spriteKey}, using placeholder`);
+      this.sprite.setFillStyle(tint);
+      this.sprite.setDisplaySize(16, 16);
+    }
 
     // Name label
     this.label = scene.add.text(0, 22, name, {
