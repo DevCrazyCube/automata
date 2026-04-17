@@ -197,7 +197,18 @@ export default class Agent {
     this.hideProgress();
     this.hideChat();
     this.container.setPosition(this.homeX, this.homeY);
+    if (this.idleBehavior) this.idleBehavior.resume();
     this._schedulePatrol();
+  }
+
+  // ── Frame update (called from scene) ──
+  update(time) {
+    // Continuous idle behavior checking (prevents freezing)
+    if (this.state === STATE.IDLE || this.state === STATE.PATROLLING) {
+      if (this.idleBehavior) {
+        this.idleBehavior.update();
+      }
+    }
   }
 
   // ── Progress bar ────────────────────────────────────────────────────────────

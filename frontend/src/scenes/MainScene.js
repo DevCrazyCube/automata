@@ -153,13 +153,29 @@ class MainScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.DESTROY,  () => this._unbindSocketHandlers());
   }
 
+  update(time, delta) {
+    // Update all agents every frame (prevents idle behavior freezing)
+    for (const agent of Object.values(this.agents)) {
+      if (agent && agent.update) {
+        agent.update(time);
+      }
+    }
+  }
+
   _setupCamera() {
-    // Center camera on first agent with smooth easing
+    const cam = this.cameras.main;
+    cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    // Isometric view: rotate and scale for top-down isometric perspective
+    cam.setScroll(0, 0);
+    cam.setOrigin(0.5, 0.5);
+    cam.setZoom(1.2); // Slightly zoomed for better visibility
+
+    // Center on first agent with smooth follow
     const firstAgent = Object.values(this.agents)[0];
     if (firstAgent) {
-      this.cameras.main.startFollow(firstAgent.container, true);
-      this.cameras.main.setLerp(0.08, 0.08);
-      this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      cam.startFollow(firstAgent.container, true);
+      cam.setLerp(0.1, 0.1);
     }
   }
 
