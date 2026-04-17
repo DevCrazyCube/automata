@@ -52,17 +52,21 @@ export default class Agent {
 
     // ── Container (all children positioned relative to container origin) ──
     this.container = scene.add.container(x, y);
+    this.container.setDepth(20);
 
-    // Sprite (32×32, centred on container origin)
+    // Debug: Add a colored rectangle if sprite doesn't load
+    let spriteObj = null;
     const spriteKey = `agent_${agentKey}_idle`;
-    this.sprite = scene.add.image(0, 0, spriteKey);
-    this.sprite.setOrigin(0.5, 0.5);
 
-    // Fallback if sprite doesn't exist
-    if (!scene.textures.exists(spriteKey)) {
-      console.warn(`Sprite key not found: ${spriteKey}, using placeholder`);
-      this.sprite.setFillStyle(tint);
-      this.sprite.setDisplaySize(16, 16);
+    if (scene.textures.exists(spriteKey)) {
+      this.sprite = scene.add.image(0, 0, spriteKey);
+      this.sprite.setOrigin(0.5, 0.5);
+      spriteObj = this.sprite;
+    } else {
+      console.warn(`Sprite key not found: ${spriteKey}, creating placeholder rectangle`);
+      spriteObj = scene.add.rectangle(0, 0, 24, 28, tint, 0.9);
+      spriteObj.setOrigin(0.5, 0.5);
+      this.sprite = spriteObj;
     }
 
     // Name label
@@ -102,15 +106,17 @@ export default class Agent {
     this.shadow = scene.add.ellipse(0, 14, 18, 6, 0x000020, 0.4);
 
     // Add children to container in draw order
-    this.container.add([
-      this.shadow,
-      this.sprite,
-      this.label,
-      this.progressBg,
-      this.progressFill,
-      this.bubbleBg,
-      this.bubbleText,
-    ]);
+    if (spriteObj) {
+      this.container.add([
+        this.shadow,
+        spriteObj,
+        this.label,
+        this.progressBg,
+        this.progressFill,
+        this.bubbleBg,
+        this.bubbleText,
+      ]);
+    }
 
     // Start idle patrol immediately
     this._schedulePatrol();

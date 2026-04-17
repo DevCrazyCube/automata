@@ -170,6 +170,11 @@ class MainScene extends Phaser.Scene {
     this.office = new OfficeEnvironment(this);
     this.office.build();
 
+    // Debug: Add visible test rectangle to verify rendering
+    this.add.rectangle(100, 100, 32, 32, 0xff0000, 0.8)
+      .setOrigin(0.5, 0.5)
+      .setDepth(50);
+
     // Add title at top
     const W = WORLD_WIDTH;
     this.add.text(W / 2, 10, '◈  AUTOMATA  DEFI OPERATIONS CENTER  ◈', {
