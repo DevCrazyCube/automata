@@ -61,11 +61,12 @@ export default class Agent {
     if (scene.textures.exists(spriteKey)) {
       this.sprite = scene.add.image(0, 0, spriteKey);
       this.sprite.setOrigin(0.5, 0.5);
-      // Scale character sprite to reasonable size (not full sheet)
-      this.sprite.setDisplaySize(32, 64);
+      // Scale character sprite to tile-appropriate size
+      // Most character PNGs are around 200-400px wide, we want 32-48px
+      this.sprite.setDisplaySize(48, 48);
     } else {
-      // Fallback: colored rectangle
-      this.sprite = scene.add.rectangle(0, 0, 16, 24, tint, 0.9);
+      // Fallback: colored rectangle (tile-sized)
+      this.sprite = scene.add.rectangle(0, 0, 32, 48, tint, 0.9);
       this.sprite.setOrigin(0.5, 0.5);
       console.warn(`Sprite not loaded: ${spriteKey}, using placeholder`);
     }

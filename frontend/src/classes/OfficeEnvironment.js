@@ -1,34 +1,38 @@
 // classes/OfficeEnvironment.js
-// Build office from layout JSON with tilemap, furniture, and interactive zones
+// Build office from layout JSON with proper tilemap, furniture placement, and z-ordering
 
 import InteractiveObject from './InteractiveObject.js';
-import { LayoutLoader } from './LayoutLoader.js';
-import { furnitureManager } from './FurnitureManager.js';
+import { assetLoader } from './AssetLoader.js';
 
 const TILE_SIZE = 32;
+const VOID_TILE = 255;
 
 export default class OfficeEnvironment {
   constructor(scene) {
     this.scene = scene;
-    this.layout = null;
     this.interactiveObjects = {};
     this.furnitureSprites = [];
-    this.tilemap = null;
+    this.tileSprites = [];
+    this.layout = null;
+    this.catalog_map = null;
   }
 
   async build() {
-    // Load layout JSON
-    this.layout = await LayoutLoader.loadDefaultLayout();
+    // Load all assets
+    await assetLoader.loadAll();
+    this.layout = assetLoader.getLayout();
+
     if (!this.layout) {
       console.error('Failed to load layout');
       return this.interactiveObjects;
     }
 
-    // Load furniture manifests
-    await furnitureManager.loadAllManifests();
+    // Build catalog for furniture lookups
+    const { catalog_map } = assetLoader.buildCatalog();
+    this.catalog_map = catalog_map;
 
-    // Build tilemap layers
-    this._buildTilemap();
+    // Render tilemap (floor and walls)
+    this._renderTilemap();
 
     // Place furniture objects
     this._placeFurniture();
@@ -39,127 +43,153 @@ export default class OfficeEnvironment {
     return this.interactiveObjects;
   }
 
-  _buildTilemap() {
-    const { cols, rows } = this.layout;
-    const floorLayer = this.scene.add.layer();
-    const wallLayer = this.scene.add.layer();
+  _renderTilemap() {
+    const { cols, rows, tiles, tileColors } = this.layout;
 
-    // Render each tile
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        const tileType = LayoutLoader.getTileType(this.layout, col, row);
-        const tileColor = LayoutLoader.getTileColor(this.layout, col, row);
+        const tileType = tiles[row * cols + col];
+        if (tileType === VOID_TILE) continue;
+
         const x = col * TILE_SIZE + TILE_SIZE / 2;
         const y = row * TILE_SIZE + TILE_SIZE / 2;
+        const color = this._getTileColor(tileColors, col, row, tileType);
 
-        if (tileType === 255) continue; // VOID tiles - skip
-
-        if (tileType === 0) {
-          // Wall tile - render with color
-          const color = tileColor ? this._hslToHex(tileColor) : 0x888888;
-          this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color)
-            .setOrigin(0.5, 0.5)
-            .setDepth(1);
-          wallLayer.add(this.scene.add.text(0, 0, ''));
-        } else {
-          // Floor tile - render with color or sprite
-          const color = tileColor ? this._hslToHex(tileColor) : 0xd4c9b8;
-          this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color)
-            .setOrigin(0.5, 0.5)
-            .setDepth(2);
-          floorLayer.add(this.scene.add.text(0, 0, ''));
-        }
+        // Render tile as rectangle
+        const tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
+        tile.setOrigin(0.5, 0.5);
+        tile.setDepth(1);
+        this.tileSprites.push(tile);
       }
     }
   }
 
+  _getTileColor(tileColors, col, row, tileType) {
+    const colorData = tileColors?.[row * this.layout.cols + col];
+
+    if (!colorData) {
+      // Default colors
+      return tileType === 0 ? 0x888888 : 0xd4c9b8;
+    }
+
+    // Convert HSL-like color object to hex
+    return this._hslToHex(colorData);
+  }
+
   _hslToHex(color) {
-    if (!color || !color.h) return 0x888888;
+    if (!color || typeof color.h !== 'number') return 0x888888;
+
     // Simplified HSL to RGB conversion
     const h = (color.h || 0) / 360;
-    const s = ((color.s || 0) + 100) / 100;
-    const l = ((color.b || 0) + 100) / 100;
+    const s = Math.min(Math.max((color.s || 0) / 100, 0), 1);
+    const l = Math.min(Math.max((color.b || 0) / 100, 0), 1);
+
     const c = (1 - Math.abs(2 * l - 1)) * s;
     const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
     const m = l - c / 2;
+
     let r = 0, g = 0, b = 0;
-    if (h < 1/6) { r = c; g = x; }
-    else if (h < 2/6) { r = x; g = c; }
-    else if (h < 3/6) { g = c; b = x; }
-    else if (h < 4/6) { g = x; b = c; }
-    else if (h < 5/6) { r = x; b = c; }
-    else { r = c; b = x; }
+    if (h < 1/6) { r = c; g = x; b = 0; }
+    else if (h < 2/6) { r = x; g = c; b = 0; }
+    else if (h < 3/6) { r = 0; g = c; b = x; }
+    else if (h < 4/6) { r = 0; g = x; b = c; }
+    else if (h < 5/6) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+
     const rr = Math.round((r + m) * 255);
     const gg = Math.round((g + m) * 255);
     const bb = Math.round((b + m) * 255);
+
     return (rr << 16) | (gg << 8) | bb;
   }
 
   _placeFurniture() {
-    const furniture = LayoutLoader.getAllFurniture(this.layout);
+    const furniture = assetLoader.getFurnitureList();
 
-    for (const furnitureItem of furniture) {
-      const assetPath = furnitureManager.getAssetPath(furnitureItem.type);
-      const dims = furnitureManager.getAssetDimensions(furnitureItem.type);
+    for (const item of furniture) {
+      this._placeFurnitureItem(item);
+    }
+  }
 
-      if (!assetPath) {
-        console.warn(`No asset path for ${furnitureItem.type}`);
-        continue;
-      }
-
-      // Load furniture image and create sprite
-      const img = new Image();
-      img.onload = () => {
-        const x = furnitureItem.col * TILE_SIZE + TILE_SIZE / 2;
-        const y = furnitureItem.row * TILE_SIZE + TILE_SIZE / 2;
-
-        const sprite = this.scene.add.image(x, y, furnitureItem.type);
-        sprite.setOrigin(0.5, 0.5);
-        sprite.setDepth(5);
-
-        // Scale to tile size
-        const scale = TILE_SIZE / Math.max(dims.width, dims.height);
-        sprite.setScale(scale);
-
-        this.furnitureSprites.push(sprite);
-      };
-      img.onerror = () => {
-        console.warn(`Failed to load furniture image: ${assetPath}`);
-      };
-
-      // Actually load the image via Phaser
-      if (!this.scene.textures.exists(furnitureItem.type)) {
-        this.scene.load.image(furnitureItem.type, assetPath);
-      }
+  _placeFurnitureItem(item) {
+    const entry = this.catalog_map?.get(item.type);
+    if (!entry) {
+      console.warn(`Furniture not found: ${item.type}`);
+      return;
     }
 
-    // Start load if we added any images
-    if (furniture.length > 0) {
-      this.scene.load.start();
-    }
+    const x = item.col * TILE_SIZE + TILE_SIZE / 2;
+    const y = item.row * TILE_SIZE + TILE_SIZE / 2;
+
+    // Create a placeholder for furniture (colored rectangle with label)
+    const furnitureSprite = this.scene.add.rectangle(
+      x, y,
+      entry.footprintW * TILE_SIZE,
+      entry.footprintH * TILE_SIZE,
+      0x6b5437
+    );
+    furnitureSprite.setOrigin(0.5, 0.5);
+    furnitureSprite.setDepth(5);
+    furnitureSprite.setStrokeStyle(1, 0x8b7355);
+
+    // Add label
+    const label = this.scene.add.text(x, y, entry.id.split('_')[0], {
+      fontSize: '8px',
+      color: '#cccccc',
+      fontFamily: 'monospace'
+    });
+    label.setOrigin(0.5, 0.5);
+    label.setDepth(6);
+
+    this.furnitureSprites.push(furnitureSprite);
+    this.furnitureSprites.push(label);
   }
 
   _createInteractiveObjects() {
-    // Create interactive zones at fixed locations for idle behaviors
-    this.interactiveObjects.coffee = new InteractiveObject(
-      this.scene, 150, 450, 'coffee_machine'
-    );
-    this.interactiveObjects.couch = new InteractiveObject(
-      this.scene, 450, 150, 'couch_64x32'
-    );
-    this.interactiveObjects.table = new InteractiveObject(
-      this.scene, 250, 550, 'table'
-    );
-    this.interactiveObjects.whiteboard = new InteractiveObject(
-      this.scene, 100, 300, 'whiteboard'
-    );
-    this.interactiveObjects.water_cooler = new InteractiveObject(
-      this.scene, 650, 550, 'water_cooler'
-    );
+    // Create interactive zones at strategic locations
+    // These can be referenced by idle behaviors
+
+    // Find coffee and other key furniture in layout
+    const furniture = assetLoader.getFurnitureList();
+
+    for (const item of furniture) {
+      const type = item.type.split(':')[0]; // Remove :left variants
+      const x = item.col * TILE_SIZE + TILE_SIZE / 2;
+      const y = item.row * TILE_SIZE + TILE_SIZE / 2;
+
+      if (type === 'COFFEE' && !this.interactiveObjects.coffee) {
+        this.interactiveObjects.coffee = new InteractiveObject(this.scene, x, y, 'coffee');
+      } else if (type === 'SOFA' && !this.interactiveObjects.couch) {
+        this.interactiveObjects.couch = new InteractiveObject(this.scene, x, y, 'couch');
+      } else if ((type === 'SMALL_TABLE' || type === 'TABLE') && !this.interactiveObjects.table) {
+        this.interactiveObjects.table = new InteractiveObject(this.scene, x, y, 'table');
+      } else if (type === 'WHITEBOARD' && !this.interactiveObjects.whiteboard) {
+        this.interactiveObjects.whiteboard = new InteractiveObject(this.scene, x, y, 'whiteboard');
+      }
+    }
+
+    // Create fallback objects if not found
+    if (!this.interactiveObjects.coffee) {
+      this.interactiveObjects.coffee = new InteractiveObject(this.scene, 200, 400, 'coffee');
+    }
+    if (!this.interactiveObjects.couch) {
+      this.interactiveObjects.couch = new InteractiveObject(this.scene, 400, 200, 'couch');
+    }
+    if (!this.interactiveObjects.table) {
+      this.interactiveObjects.table = new InteractiveObject(this.scene, 300, 500, 'table');
+    }
+    if (!this.interactiveObjects.whiteboard) {
+      this.interactiveObjects.whiteboard = new InteractiveObject(this.scene, 150, 300, 'whiteboard');
+    }
+    if (!this.interactiveObjects.water_cooler) {
+      this.interactiveObjects.water_cooler = new InteractiveObject(this.scene, 600, 500, 'water_cooler');
+    }
   }
 
   destroy() {
-    this.furnitureSprites.forEach(s => s.destroy());
+    this.tileSprites.forEach(s => s?.destroy?.());
+    this.furnitureSprites.forEach(s => s?.destroy?.());
+    this.tileSprites = [];
     this.furnitureSprites = [];
   }
 }

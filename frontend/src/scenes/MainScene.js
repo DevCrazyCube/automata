@@ -11,8 +11,14 @@ import IdleBehavior from '../classes/IdleBehavior.js';
 import AgentInteraction from '../classes/AgentInteraction.js';
 import socket from '../services/socketService.js';
 
-export const WORLD_WIDTH  = 21 * 32;  // 672px (21 cols × 32px tile size)
-export const WORLD_HEIGHT = 22 * 32;  // 704px (22 rows × 32px tile size)
+// World dimensions will be set based on loaded layout
+let WORLD_WIDTH = 800;
+let WORLD_HEIGHT = 600;
+
+export const setWorldDimensions = (w, h) => {
+  WORLD_WIDTH = w;
+  WORLD_HEIGHT = h;
+};
 
 // Workstation layout constants
 const PAD   = 24;
@@ -138,21 +144,19 @@ class MainScene extends Phaser.Scene {
     registerAll(this);
   }
 
-  create() {
+  async create() {
     // Set up animations after sprites are loaded
     registerAnimations(this);
 
-    // Build office (loads layout and furniture)
-    this._buildOffice();
+    // Build office asynchronously (loads layout and furniture)
+    await this._buildOffice();
 
-    // Wait a frame for furniture to load, then build agents
-    this.time.delayedCall(100, () => {
-      this._buildAgents();
-      this._setupIdleBehaviors();
-      this._setupAgentInteraction();
-      this._setupCamera();
-      this._bindSocketHandlers();
-    });
+    // Build agents after office is loaded
+    this._buildAgents();
+    this._setupIdleBehaviors();
+    this._setupAgentInteraction();
+    this._setupCamera();
+    this._bindSocketHandlers();
 
     // Socket cleanup on scene shutdown (supports HMR).
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this._unbindSocketHandlers());
@@ -170,29 +174,37 @@ class MainScene extends Phaser.Scene {
 
   _setupCamera() {
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const W = WORLD_WIDTH;
+    const H = WORLD_HEIGHT;
+
+    cam.setBounds(0, 0, W, H);
 
     // Fit entire office in view
-    const viewport = this.cameras.main;
-    const zoomX = viewport.width / WORLD_WIDTH;
-    const zoomY = viewport.height / WORLD_HEIGHT;
-    const zoom = Math.min(zoomX, zoomY) * 0.95;
+    const viewport = cam;
+    const zoomX = viewport.width / W;
+    const zoomY = viewport.height / H;
+    const zoom = Math.min(zoomX, zoomY) * 0.9;
 
-    cam.setZoom(zoom);
-    cam.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    cam.setZoom(Math.max(zoom, 0.5));
+    cam.centerOn(W / 2, H / 2);
   }
 
   // ── Office world construction ───────────────────────────────────────────────
 
-  _buildOffice() {
+  async _buildOffice() {
     // Create office environment with tilemap and furniture
     this.office = new OfficeEnvironment(this);
-    this.office.build();
+    await this.office.build();
 
-    // Debug: Add visible test rectangle to verify rendering
-    this.add.rectangle(100, 100, 32, 32, 0xff0000, 0.8)
-      .setOrigin(0.5, 0.5)
-      .setDepth(50);
+    // Update world dimensions from loaded layout
+    const layout = this.office.layout;
+    if (layout) {
+      const newWidth = layout.cols * 32;
+      const newHeight = layout.rows * 32;
+      setWorldDimensions(newWidth, newHeight);
+      WORLD_WIDTH = newWidth;
+      WORLD_HEIGHT = newHeight;
+    }
 
     // Add title at top
     const W = WORLD_WIDTH;
@@ -204,34 +216,41 @@ class MainScene extends Phaser.Scene {
       stroke: '#001433',
       strokeThickness: 3,
     }).setOrigin(0.5, 0.5).setDepth(100);
-
-    // Subtle vignette overlay
-    const H = WORLD_HEIGHT;
-    const vignette = this.add.graphics();
-    const gradSteps = 6;
-    for (let i = gradSteps; i >= 0; i--) {
-      const alpha = (1 - i / gradSteps) * 0.1;
-      const margin = i * (Math.min(W, H) / gradSteps / 2);
-      vignette.fillStyle(0x000010, alpha);
-      vignette.fillRect(0, 0, W, margin);
-      vignette.fillRect(0, H - margin, W, margin);
-      vignette.fillRect(0, 0, margin, H);
-      vignette.fillRect(W - margin, 0, margin, H);
-    }
-    vignette.setDepth(99);
   }
 
   // ── Agent initialisation ────────────────────────────────────────────────────
 
   _buildAgents() {
-    // Place 4 agents at desks from layout (DESK_FRONT positions)
-    // From layout: DESK_FRONT at (col: 2, row: 12) and (col: 6, row: 12)
+    // Place 4 agents at desks from layout
+    // Find DESK_FRONT positions and assign agents
     const TILE_SIZE = 32;
+    const deskPositions = [];
+    const furniture = this.office.layout?.furniture || [];
+
+    for (const item of furniture) {
+      if (item.type === 'DESK_FRONT') {
+        deskPositions.push({
+          x: item.col * TILE_SIZE,
+          y: item.row * TILE_SIZE
+        });
+      }
+    }
+
+    // If we don't have enough desks, use fallback positions
+    if (deskPositions.length < 4) {
+      deskPositions.push(
+        { x: 2 * TILE_SIZE, y: 12 * TILE_SIZE },
+        { x: 6 * TILE_SIZE, y: 12 * TILE_SIZE },
+        { x: 2 * TILE_SIZE, y: 16 * TILE_SIZE },
+        { x: 6 * TILE_SIZE, y: 16 * TILE_SIZE }
+      );
+    }
+
     const agentPositions = {
-      deployer:    { x: 2 * TILE_SIZE, y: 12 * TILE_SIZE },      // col 2, row 12
-      distributor: { x: 6 * TILE_SIZE, y: 12 * TILE_SIZE },      // col 6, row 12
-      swapper:     { x: 2 * TILE_SIZE, y: 16 * TILE_SIZE },      // Other desks
-      extractor:   { x: 6 * TILE_SIZE, y: 16 * TILE_SIZE },
+      deployer:    deskPositions[0] || { x: 64, y: 384 },
+      distributor: deskPositions[1] || { x: 192, y: 384 },
+      swapper:     deskPositions[2] || { x: 64, y: 512 },
+      extractor:   deskPositions[3] || { x: 192, y: 512 },
     };
 
     const agentConfigs = {
