@@ -71,6 +71,37 @@ export function queueFurnitureLoads(scene) {
   return queued;
 }
 
+/** Recursively extract all asset members from nested group structures */
+function extractAssets(members, groupId, category, backgroundTiles) {
+  const assets = [];
+  if (!Array.isArray(members)) return assets;
+
+  for (const member of members) {
+    if (member.type === 'asset' && member.id) {
+      const base = {
+        groupId,
+        textureKey: `furn_${member.id}`,
+        footprintW: member.footprintW || 1,
+        footprintH: member.footprintH || 1,
+        width: member.width,
+        height: member.height,
+        orientation: member.orientation || 'front',
+        mirrorSide: Boolean(member.mirrorSide),
+        category,
+        backgroundTiles,
+      };
+      assets.push({ id: member.id, base });
+      // Virtual :left entry for mirrored side variants
+      if (member.mirrorSide && member.orientation === 'side') {
+        assets.push({ id: `${member.id}:left`, base: { ...base, orientation: 'left' } });
+      }
+    } else if (member.type === 'group' && Array.isArray(member.members)) {
+      assets.push(...extractAssets(member.members, groupId, category, backgroundTiles));
+    }
+  }
+  return assets;
+}
+
 /** Build a lookup map: furnitureId → { key, footprintW, footprintH, orientation, mirrorSide, ... } */
 export function buildFurnitureCatalog(scene) {
   const catalog = new Map();
@@ -92,24 +123,9 @@ export function buildFurnitureCatalog(scene) {
         backgroundTiles: manifest.backgroundTiles || 0,
       });
     } else if (Array.isArray(manifest.members)) {
-      for (const member of manifest.members) {
-        const base = {
-          groupId: type,
-          textureKey: `furn_${member.id}`,
-          footprintW: member.footprintW || 1,
-          footprintH: member.footprintH || 1,
-          width: member.width,
-          height: member.height,
-          orientation: member.orientation || 'front',
-          mirrorSide: Boolean(member.mirrorSide),
-          category: manifest.category || 'misc',
-          backgroundTiles: manifest.backgroundTiles || 0,
-        };
-        catalog.set(member.id, base);
-        // Virtual :left entry for mirrored side variants
-        if (member.mirrorSide && member.orientation === 'side') {
-          catalog.set(`${member.id}:left`, { ...base, orientation: 'left' });
-        }
+      const assets = extractAssets(manifest.members, type, manifest.category || 'misc', manifest.backgroundTiles || 0);
+      for (const { id, base } of assets) {
+        catalog.set(id, base);
       }
     }
   }
