@@ -1,30 +1,12 @@
 // classes/AgentInteraction.js
 // Manages proximity-based interactions between agents.
-// When 2+ agents are nearby and idle, they face each other and play conversation animations.
+// Generates LLM-based conversations when agents meet.
 
 import { STATE } from './Agent.js';
-
-const CONVERSATION_STARTERS = [
-  'How\'s your day going?',
-  'Did you hear about that?',
-  'Pretty crazy stuff lately',
-  'What have you been up to?',
-  'Have you seen the news?',
-  'Things are getting wild',
-  'Tell me about your week',
-  'Any interesting updates?',
-  'What do you think about it?',
-  'Heard anything new?',
-  'Things are looking up',
-  'It\'s been quite a day',
-  'What\'s your take on it?',
-  'You catch that story?',
-  'Pretty wild developments',
-];
-
-function getRandomConversation() {
-  return CONVERSATION_STARTERS[Math.floor(Math.random() * CONVERSATION_STARTERS.length)];
-}
+import {
+  generateAgentConversation,
+  getFallbackConversation,
+} from '../services/agentConversationService.js';
 
 export default class AgentInteraction {
   constructor(scene, agents) {
@@ -72,42 +54,35 @@ export default class AgentInteraction {
     return dist < 128 && dist > 20;
   }
 
-  _startConversation(agent1, agent2) {
+  async _startConversation(agent1, agent2) {
     const key = this._getPairKey(agent1, agent2);
 
     if (this.activeConversations.has(key)) return;
 
-    // Play conversation animation if available
-    const talkKey1 = `${agent1.agentKey}_talk`;
-    const talkKey2 = `${agent2.agentKey}_talk`;
+    // Try to generate LLM conversation, fall back to hardcoded if API unavailable
+    let conversation = await generateAgentConversation(
+      agent1.agentKey,
+      agent2.agentKey
+    );
 
-    if (agent1.scene.anims.exists(talkKey1)) {
-      try {
-        agent1.scene.anims.play(talkKey1, agent1.sprite);
-      } catch (e) {
-        console.warn('Failed to play animation:', talkKey1, e);
-      }
+    if (!conversation) {
+      conversation = getFallbackConversation();
     }
 
-    if (agent2.scene.anims.exists(talkKey2)) {
-      try {
-        agent2.scene.anims.play(talkKey2, agent2.sprite);
-      } catch (e) {
-        console.warn('Failed to play animation:', talkKey2, e);
-      }
-    }
-
-    const conversation = {
-      agent1, agent2,
+    const convEntry = {
+      agent1,
+      agent2,
       startTime: Date.now(),
       endTime: Date.now() + (8000 + Math.random() * 4000), // 8-12 seconds
-      message: getRandomConversation(),
+      agent1Line: conversation.line1,
+      agent2Line: conversation.line2,
     };
 
-    this.activeConversations.set(key, conversation);
+    this.activeConversations.set(key, convEntry);
 
-    agent1.setChatText(conversation.message);
-    agent2.setChatText(conversation.message);
+    // Alternate chat lines between agents
+    agent1.setChatText(conversation.line1);
+    agent2.setChatText(conversation.line2);
   }
 
   _endConversation(agent1, agent2) {

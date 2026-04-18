@@ -55,11 +55,12 @@ function PhaserScene({ onGameReady }) {
       id="phaser-container"
       ref={containerRef}
       style={{
-        flex: 1,
-        minHeight: 0,
-        minWidth: 0,
+        width: '100vw',
+        height: '100vh',
         overflow: 'hidden',
-        position: 'relative',
+        position: 'fixed',
+        top: 0,
+        left: 0,
       }}
       className="bg-gray-950"
     />

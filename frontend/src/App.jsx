@@ -1,13 +1,10 @@
 // App.jsx
-// Main React app. Manages operation state, socket listeners, and renders
-// the game scene + UI controls + sidebar (agent chat + transactions).
+// Full-screen immersive office game with hamburger menu.
+// Agents act autonomously. Click agents to interact. Menu for stats/settings.
 
 import { useState, useEffect } from 'react';
 import PhaserScene from './scenes/PhaserScene.jsx';
-import ControlPanel from './components/ControlPanel.jsx';
-import AgentChat from './components/AgentChat.jsx';
-import TransactionLog from './components/TransactionLog.jsx';
-import FinalReport from './components/FinalReport.jsx';
+import HamburgerMenu from './components/HamburgerMenu.jsx';
 import socket from './services/socketService.js';
 
 const MAX_AGENT_ENTRIES = 300;
@@ -22,6 +19,7 @@ function App() {
   const [agentEntries, setAgentEntries] = useState([]);
   const [logs, setLogs] = useState([]);
   const [finalReport, setFinalReport] = useState(null);
+  const [gameReady, setGameReady] = useState(false);
 
   // ── Socket listeners ────────────────────────────────────────────────────
 
@@ -177,56 +175,24 @@ function App() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col">
-      {/* Top bar with driver/mode badges */}
-      <div className="flex items-center gap-3 px-4 py-2 bg-gray-950 border-b border-gray-800 text-xs font-mono">
-        <span className="text-gray-400">AUTOMATA</span>
-        <span className="px-2 py-0.5 bg-gray-800 rounded text-gray-300">mode: {mode}</span>
-        <span
-          className={`px-2 py-0.5 rounded ${
-            driver === 'agents' ? 'bg-emerald-900 text-emerald-300' : 'bg-gray-800 text-gray-300'
-          }`}
-        >
-          driver: {driver}
-        </span>
-        <span className="ml-auto flex items-center gap-1">
-          <span
-            className={`inline-block w-2 h-2 rounded-full ${
-              isConnected ? 'bg-emerald-400' : 'bg-red-400'
-            }`}
-          />
-          {isConnected ? 'connected' : 'disconnected'}
-        </span>
-      </div>
+    <div className="w-screen h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
+      {/* Full-screen game */}
+      <PhaserScene onGameReady={() => setGameReady(true)} />
 
-      {/* Main content area: game on left, sidebar on right */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Game area */}
-        <div className="flex-1 flex flex-col">
-          <PhaserScene onGameReady={() => {}} />
-          <ControlPanel
-            isRunning={isRunning}
-            isPaused={isPaused}
-            isConnected={isConnected}
-            mode={mode}
-            onStart={handleStart}
-            onPause={handlePause}
-            onResume={handleResume}
-            onStop={handleStop}
-          />
-        </div>
-
-        {/* Sidebar: agent chat + transactions */}
-        <div className="w-96 border-l border-gray-700 bg-gray-950 p-4 overflow-hidden flex flex-col gap-3">
-          <AgentChat entries={agentEntries} />
-          <TransactionLog logs={logs} />
-        </div>
-      </div>
-
-      {/* Final report modal */}
-      {finalReport && (
-        <FinalReport report={finalReport} onDismiss={() => setFinalReport(null)} />
-      )}
+      {/* Hamburger menu overlay */}
+      <HamburgerMenu
+        isConnected={isConnected}
+        mode={mode}
+        driver={driver}
+        isRunning={isRunning}
+        isPaused={isPaused}
+        agentEntries={agentEntries}
+        logs={logs}
+        onStart={handleStart}
+        onPause={handlePause}
+        onResume={handleResume}
+        onStop={handleStop}
+      />
     </div>
   );
 }
