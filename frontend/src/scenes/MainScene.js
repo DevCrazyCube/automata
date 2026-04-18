@@ -6,15 +6,16 @@
 import Phaser from 'phaser';
 import Agent from '../classes/Agent.js';
 import { registerAll, registerAnimations, queueFurnitureLoads } from '../classes/SpriteFactory.js';
-import OfficeEnvironment from '../classes/OfficeEnvironment.js';
+import GridOffice from '../classes/GridOffice.js';
 import IdleBehavior from '../classes/IdleBehavior.js';
 import AgentInteraction from '../classes/AgentInteraction.js';
 import { AgentClickHandler } from '../services/agentClickService.js';
+import { gridToPixel, AGENT_STARTING_POSITIONS, TILE_SIZE } from '../services/officeLayoutService.js';
 import socket from '../services/socketService.js';
 
-// World dimensions will be set based on loaded layout
-let WORLD_WIDTH = 800;
-let WORLD_HEIGHT = 600;
+// World dimensions will be set based on grid layout
+let WORLD_WIDTH = 12 * TILE_SIZE;
+let WORLD_HEIGHT = 10 * TILE_SIZE;
 
 export const setWorldDimensions = (w, h) => {
   WORLD_WIDTH = w;
@@ -22,59 +23,6 @@ export const setWorldDimensions = (w, h) => {
 };
 
 export const getWorldDimensions = () => ({ width: WORLD_WIDTH, height: WORLD_HEIGHT });
-
-// Workstation layout constants
-const PAD   = 24;
-const WS_W  = 80;   // workstation sprite is drawn at 2.5× scale → 80px rendered
-const WS_H  = 80;
-const COL_A = PAD + WS_W / 2 + 20;
-const COL_B = WORLD_WIDTH - PAD - WS_W / 2 - 20;
-const ROW_1 = PAD + 80;
-const ROW_2 = WORLD_HEIGHT - PAD - 80;
-
-/** 4 workstation descriptors. zone is the Phaser "logical zone" agents walk to. */
-const STATIONS = {
-  deployer: {
-    key:       'workstation_deployer',
-    agentKey:  'deployer',
-    name:      'Deployer',
-    tint:      0xff5555,
-    wsX:       COL_A,
-    wsY:       ROW_1,
-    label:     'DEPLOYMENT',
-    subLabel:  'Token Contract',
-  },
-  distributor: {
-    key:       'workstation_distributor',
-    agentKey:  'distributor',
-    name:      'Distributor',
-    tint:      0x44ddcc,
-    wsX:       COL_B,
-    wsY:       ROW_1,
-    label:     'DISTRIBUTION',
-    subLabel:  'Token Staging',
-  },
-  swapper: {
-    key:       'workstation_swapper',
-    agentKey:  'swapper',
-    name:      'Swapper',
-    tint:      0xffdd44,
-    wsX:       COL_A,
-    wsY:       ROW_2,
-    label:     'SWAP FLOOR',
-    subLabel:  'DEX Router',
-  },
-  extractor: {
-    key:       'workstation_extractor',
-    agentKey:  'extractor',
-    name:      'Extractor',
-    tint:      0x88eedd,
-    wsX:       COL_B,
-    wsY:       ROW_2,
-    label:     'EXTRACTION',
-    subLabel:  'LP Removal',
-  },
-};
 
 /** Map backend zone names to station keys. */
 const ZONE_MAP = {
@@ -191,28 +139,14 @@ class MainScene extends Phaser.Scene {
   _setupCamera() {
     const cam = this.cameras.main;
     const layout = this.office?.layout;
-    const TILE = 32;
 
-    // Tight bounding box of non-VOID tiles only.
-    let firstRow = 0, lastRow = 0, firstCol = 0, lastCol = 0;
-    if (layout) {
-      let found = false;
-      for (let r = 0; r < layout.rows; r++) {
-        for (let c = 0; c < layout.cols; c++) {
-          if (layout.tiles[r * layout.cols + c] !== 255) {
-            if (!found) { firstRow = r; firstCol = c; lastCol = c; found = true; }
-            lastRow = r;
-            if (c < firstCol) firstCol = c;
-            if (c > lastCol) lastCol = c;
-          }
-        }
-      }
-    }
+    if (!layout) return;
 
-    const startX = firstCol * TILE;
-    const startY = firstRow * TILE;
-    const contentW = (lastCol - firstCol + 1) * TILE;
-    const contentH = (lastRow - firstRow + 1) * TILE;
+    // Grid-based bounds
+    const startX = 0;
+    const startY = 0;
+    const contentW = layout.cols * TILE_SIZE;
+    const contentH = layout.rows * TILE_SIZE;
 
     cam.setBounds(startX, startY, contentW, contentH);
 
@@ -228,15 +162,15 @@ class MainScene extends Phaser.Scene {
   // ── Office world construction ───────────────────────────────────────────────
 
   _buildOffice() {
-    // Create office environment with tilemap and furniture
-    this.office = new OfficeEnvironment(this);
+    // Create grid-based office with furniture
+    this.office = new GridOffice(this);
     this.office.build();
 
-    // Update world dimensions from loaded layout
+    // Update world dimensions from layout
     const layout = this.office.layout;
     if (layout) {
-      const newWidth = layout.cols * 32;
-      const newHeight = layout.rows * 32;
+      const newWidth = layout.cols * TILE_SIZE;
+      const newHeight = layout.rows * TILE_SIZE;
       setWorldDimensions(newWidth, newHeight);
       WORLD_WIDTH = newWidth;
       WORLD_HEIGHT = newHeight;
@@ -257,40 +191,7 @@ class MainScene extends Phaser.Scene {
   // ── Agent initialisation ────────────────────────────────────────────────────
 
   _buildAgents() {
-    const TILE_SIZE = 32;
-    const DESK_HEIGHT = 32;
-
-    // Find DESK_FRONT positions and position agents just in front
-    const deskPositions = [];
-    const furniture = this.office.layout?.furniture || [];
-
-    for (const item of furniture) {
-      if (item.type === 'DESK_FRONT') {
-        // Position agent at center of desk, slightly below (in front of desk)
-        deskPositions.push({
-          x: item.col * TILE_SIZE + TILE_SIZE * 1.5,  // center of 3-tile-wide desk
-          y: item.row * TILE_SIZE + DESK_HEIGHT + 8   // below desk
-        });
-      }
-    }
-
-    // Fallback if not enough desks found
-    if (deskPositions.length < 4) {
-      deskPositions.push(
-        { x: 2 * TILE_SIZE + TILE_SIZE, y: 12 * TILE_SIZE + DESK_HEIGHT + 8 },
-        { x: 6 * TILE_SIZE + TILE_SIZE, y: 12 * TILE_SIZE + DESK_HEIGHT + 8 },
-        { x: 2 * TILE_SIZE + TILE_SIZE, y: 16 * TILE_SIZE + DESK_HEIGHT + 8 },
-        { x: 6 * TILE_SIZE + TILE_SIZE, y: 16 * TILE_SIZE + DESK_HEIGHT + 8 }
-      );
-    }
-
-    const agentPositions = {
-      deployer:    deskPositions[0] || { x: 80, y: 400 },
-      distributor: deskPositions[1] || { x: 208, y: 400 },
-      swapper:     deskPositions[2] || { x: 80, y: 528 },
-      extractor:   deskPositions[3] || { x: 208, y: 528 },
-    };
-
+    // Use grid-based starting positions
     const agentConfigs = {
       deployer:    { name: 'Deployer',    tint: 0xff5555 },
       distributor: { name: 'Distributor', tint: 0x44ddcc },
@@ -298,11 +199,12 @@ class MainScene extends Phaser.Scene {
       extractor:   { name: 'Extractor',   tint: 0x88eedd },
     };
 
-    for (const [stKey, pos] of Object.entries(agentPositions)) {
-      const config = agentConfigs[stKey];
-      this.agents[stKey] = new Agent(
+    for (const [agentKey, config] of Object.entries(agentConfigs)) {
+      const posData = AGENT_STARTING_POSITIONS[agentKey];
+      const pos = gridToPixel(posData.col, posData.row);
+      this.agents[agentKey] = new Agent(
         this, pos.x, pos.y,
-        config.name, stKey, config.tint
+        config.name, agentKey, config.tint
       );
     }
   }
