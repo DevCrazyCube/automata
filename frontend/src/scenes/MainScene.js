@@ -191,28 +191,26 @@ class MainScene extends Phaser.Scene {
     const layout = this.office?.layout;
     const TILE = 32;
 
-    // Compute tight bounding box of non-VOID tiles, then extend 1 row up
-    // to include wall-mounted decorations (hanging plants etc. at row 9).
-    let firstRow = 0, lastRow = 0, lastCol = 0;
+    // Tight bounding box of non-VOID tiles only.
+    let firstRow = 0, lastRow = 0, firstCol = 0, lastCol = 0;
     if (layout) {
       let found = false;
       for (let r = 0; r < layout.rows; r++) {
         for (let c = 0; c < layout.cols; c++) {
           if (layout.tiles[r * layout.cols + c] !== 255) {
-            if (!found) { firstRow = r; found = true; }
+            if (!found) { firstRow = r; firstCol = c; lastCol = c; found = true; }
             lastRow = r;
+            if (c < firstCol) firstCol = c;
             if (c > lastCol) lastCol = c;
           }
         }
       }
-      // One row above the wall to show wall-mounted items
-      firstRow = Math.max(0, firstRow - 1);
     }
 
-    const startX = 0;
+    const startX = firstCol * TILE;
     const startY = firstRow * TILE;
-    const contentW = (lastCol + 1) * TILE;           // cols 0..lastCol
-    const contentH = (lastRow - firstRow + 1) * TILE; // rows firstRow..lastRow
+    const contentW = (lastCol - firstCol + 1) * TILE;
+    const contentH = (lastRow - firstRow + 1) * TILE;
 
     cam.setBounds(startX, startY, contentW, contentH);
 

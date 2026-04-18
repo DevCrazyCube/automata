@@ -108,9 +108,21 @@ export default class InteractiveObject {
     }
   }
 
+  // Guard: animations for agent interactions aren't registered in the new
+  // sprite pipeline. Skip silently instead of throwing & stranding the agent.
+  _safePlayAnim(agent, animKey, target) {
+    try {
+      if (agent?.scene?.anims?.exists?.(animKey)) {
+        agent.scene.anims.play(animKey, target);
+      }
+    } catch (e) {
+      console.warn(`anim ${animKey} failed:`, e);
+    }
+  }
+
   _coffeeInteraction(agent) {
     agent._setSprite(`agent_${agent.agentKey}_coffee_reach0`);
-    agent.scene.anims.play(`${agent.agentKey}_coffee_reach`, agent.sprite);
+    this._safePlayAnim(agent,`${agent.agentKey}_coffee_reach`, agent.sprite);
 
     // Wait for reach animation, then hold coffee
     this.scene.time.delayedCall(500, () => {
@@ -131,7 +143,7 @@ export default class InteractiveObject {
 
   _couchInteraction(agent) {
     // Sit down animation
-    agent.scene.anims.play(`${agent.agentKey}_sit_down`, agent.sprite);
+    this._safePlayAnim(agent,`${agent.agentKey}_sit_down`, agent.sprite);
 
     this.scene.time.delayedCall(600, () => {
       agent._setSprite(`agent_${agent.agentKey}_couch0`);
@@ -140,7 +152,7 @@ export default class InteractiveObject {
       // Sit for 10 seconds
       this.scene.time.delayedCall(10000, () => {
         // Get up animation
-        agent.scene.anims.play(`${agent.agentKey}_get_up`, agent.sprite);
+        this._safePlayAnim(agent,`${agent.agentKey}_get_up`, agent.sprite);
         this.scene.time.delayedCall(400, () => {
           this._completeInteraction(agent);
         });
@@ -163,7 +175,7 @@ export default class InteractiveObject {
     const duration = nearbyAgents.length >= 2 ? 12000 : 6000;
 
     if (nearbyAgents.length >= 2) {
-      agent.scene.anims.play(`${agent.agentKey}_talk`, agent.sprite);
+      this._safePlayAnim(agent,`${agent.agentKey}_talk`, agent.sprite);
       agent.setChatText('Chatting');
     }
 
@@ -173,7 +185,7 @@ export default class InteractiveObject {
   }
 
   _whiteboardInteraction(agent) {
-    agent.scene.anims.play(`${agent.agentKey}_write`, agent.sprite);
+    this._safePlayAnim(agent,`${agent.agentKey}_write`, agent.sprite);
     agent.setChatText('Writing…');
 
     // Write for 8 seconds
@@ -198,9 +210,10 @@ export default class InteractiveObject {
 
     agent.hideChat();
     agent._setSprite(`agent_${agent.agentKey}_idle`);
+    agent._setFrame(0);
     this.agentsInteracting.delete(agent);
 
-    // Return to patrol
+    // Return to patrol — use the Agent's STATE constant path.
     agent.state = 'idle';
     agent._schedulePatrol();
   }

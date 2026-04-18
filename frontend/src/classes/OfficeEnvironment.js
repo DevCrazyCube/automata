@@ -166,8 +166,14 @@ export default class OfficeEnvironment {
 
   _placeFurniture() {
     const furniture = this.layout.furniture || [];
+    const { cols, tiles } = this.layout;
 
     for (const item of furniture) {
+      // Skip items anchored on VOID tiles (wall-mounted decor above the office
+      // that would otherwise float over the dark canvas background).
+      const tileIdx = item.row * cols + item.col;
+      if (tiles[tileIdx] === VOID_TILE) continue;
+
       const entry = this.catalog.get(item.type);
       if (!entry) {
         console.warn(`No catalog entry for ${item.type}`);

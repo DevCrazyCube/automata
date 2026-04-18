@@ -50,18 +50,18 @@ export default class Agent {
     if (scene.textures.exists(textureKey)) {
       this.sprite = scene.add.sprite(0, 0, textureKey, 0);
       this.sprite.setOrigin(0.5, 1);  // anchor at bottom-center
-      this.sprite.setScale(2);        // 16×32 → 32×64 visible size
+      this.sprite.setScale(1);        // native 16×32 matches tile proportions
       this.sprite.setDepth(20);
     } else {
-      this.sprite = scene.add.rectangle(0, 0, 32, 64, tint, 0.9);
+      this.sprite = scene.add.rectangle(0, 0, 16, 32, tint, 0.9);
       this.sprite.setOrigin(0.5, 1);
       this.sprite.setDepth(20);
       console.warn(`Spritesheet missing: ${textureKey}`);
     }
 
     // Name label
-    this.label = scene.add.text(0, 8, name, {
-      fontSize: '9px',
+    this.label = scene.add.text(0, 6, name, {
+      fontSize: '7px',
       color: '#cbd5e1',
       fontFamily: 'monospace',
       stroke: '#0f172a',
@@ -69,31 +69,31 @@ export default class Agent {
     }).setOrigin(0.5, 1);
 
     // Progress bar background
-    this.progressBg = scene.add.rectangle(0, -42, 38, 5, 0x1e293b)
+    this.progressBg = scene.add.rectangle(0, -34, 24, 4, 0x1e293b)
       .setStrokeStyle(1, 0x334155)
       .setVisible(false);
 
     // Progress fill
-    this.progressFill = scene.add.rectangle(-19, -42, 0, 3, tint)
+    this.progressFill = scene.add.rectangle(-12, -34, 0, 2, tint)
       .setOrigin(0, 0.5)
       .setVisible(false);
 
     // Speech bubble background
-    this.bubbleBg = scene.add.rectangle(0, -60, 108, 18, 0x0f172a, 0.93)
+    this.bubbleBg = scene.add.rectangle(0, -46, 76, 14, 0x0f172a, 0.93)
       .setStrokeStyle(1, 0x334155)
       .setVisible(false);
 
     // Speech bubble text
-    this.bubbleText = scene.add.text(0, -60, '', {
-      fontSize: '8px',
+    this.bubbleText = scene.add.text(0, -46, '', {
+      fontSize: '7px',
       color: '#e2e8f0',
       fontFamily: 'monospace',
       align: 'center',
-      wordWrap: { width: 102, useAdvancedWrap: true },
+      wordWrap: { width: 72, useAdvancedWrap: true },
     }).setOrigin(0.5, 0.5).setVisible(false);
 
     // Shadow
-    this.shadow = scene.add.ellipse(0, 10, 18, 6, 0x000020, 0.4);
+    this.shadow = scene.add.ellipse(0, 4, 12, 4, 0x000020, 0.4);
 
     // Add children to container in draw order
     this.container.add([
@@ -239,6 +239,24 @@ export default class Agent {
     }
   }
 
+  // Legacy sprite-key compatibility for InteractiveObject/IdleBehavior,
+  // which were written for the pre-spritesheet Agent API. Map the intent
+  // of the old key to one of our three frame-set states.
+  _setSprite(spriteKey) {
+    if (!spriteKey || typeof spriteKey !== 'string') {
+      this._setFrame(0);
+      return;
+    }
+    if (spriteKey.includes('_work') || spriteKey.includes('_coffee_reach')
+        || spriteKey.includes('_write')) {
+      this._setFrame(3);   // typing
+    } else if (spriteKey.includes('_coffee') || spriteKey.includes('_couch')) {
+      this._setFrame(5);   // reading/sitting (row 0 variant)
+    } else {
+      this._setFrame(0);   // idle
+    }
+  }
+
   /** Move container to (tx, ty) with a walk animation. */
   _walkTo(tx, ty, duration, onComplete) {
     this.state = STATE.WALKING;
@@ -304,21 +322,31 @@ export default class Agent {
     });
   }
 
-  /** Schedule a random patrol step around the home zone. */
+  /** Schedule a random patrol step around the home zone. Self-recovers:
+   *  if the agent is busy when the timer fires we simply re-schedule, so
+   *  patrol never silently terminates on a transient state mismatch. */
   _schedulePatrol() {
     if (this._patrolTimer) return;
     const pause = Phaser.Math.Between(PATROL_PAUSE_MIN, PATROL_PAUSE_MAX);
     this._patrolTimer = this.scene.time.delayedCall(pause, () => {
       this._patrolTimer = null;
+
       if (this.state !== STATE.IDLE && this.state !== STATE.PATROLLING) {
+        // Try again later rather than giving up.
+        this._schedulePatrol();
         return;
       }
 
+      // Re-check after idleBehavior.update() in case it transitioned state.
       if (this.idleBehavior) {
-        this.idleBehavior.update();
+        try { this.idleBehavior.update(); } catch (e) { console.warn('idleBehavior:', e); }
       }
 
-      this._doPatrolStep();
+      if (this.state === STATE.IDLE || this.state === STATE.PATROLLING) {
+        this._doPatrolStep();
+      } else {
+        this._schedulePatrol();
+      }
     });
   }
 
