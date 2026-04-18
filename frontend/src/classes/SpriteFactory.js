@@ -16,7 +16,7 @@ export function registerAll(scene) {
   }
 
   // Load wall tilesets
-  scene.load.image('wall_dark', '/assets/walls/wall_0.png').catch(() => {});
+  scene.load.image('wall_dark', '/assets/walls/wall_0.png');
 
   // Handle load errors - create fallbacks
   scene.load.on('loaderror', (file) => {
