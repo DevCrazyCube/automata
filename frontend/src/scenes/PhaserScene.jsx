@@ -33,8 +33,9 @@ function PhaserScene({ onGameReady }) {
       backgroundColor: '#0f172a',
       scene: [MainScene],
       scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        fullscreenTarget: 'parent',
       },
       render: {
         antialias: false,        // Pixel art — no anti-aliasing.

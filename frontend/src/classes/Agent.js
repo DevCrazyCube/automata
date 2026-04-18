@@ -263,12 +263,15 @@ export default class Agent {
 
   /** Alternate walk frames on a timer. */
   _startWalkAnim() {
-    if (this._walkTimer) return;
+    // Clear any existing animation timer
+    this._stopWalkAnim();
+
     this._walkFrame = 0;
     this._walkTimer = this.scene.time.addEvent({
       delay: WALK_FRAME_INTERVAL_MS,
       loop: true,
       callback: () => {
+        if (this.state !== STATE.WALKING && this.state !== STATE.PATROLLING) return;
         this._walkFrame = (this._walkFrame + 1) % 3;  // frames 0, 1, 2 for walk
         this._setFrame(this._walkFrame);
       }
@@ -285,12 +288,15 @@ export default class Agent {
 
   /** Alternate typing frames on a timer. */
   _startTypingAnim() {
-    if (this._walkTimer) return;
+    // Stop any existing walk animation first
+    this._stopWalkAnim();
+
     this._walkFrame = 0;
     this._walkTimer = this.scene.time.addEvent({
       delay: 350,
       loop: true,
       callback: () => {
+        if (this.state !== STATE.WORKING) return; // Stop if state changed
         this._walkFrame = 1 - this._walkFrame;
         // typing frames: 3, 4
         this._setFrame(3 + this._walkFrame);
@@ -304,7 +310,9 @@ export default class Agent {
     const pause = Phaser.Math.Between(PATROL_PAUSE_MIN, PATROL_PAUSE_MAX);
     this._patrolTimer = this.scene.time.delayedCall(pause, () => {
       this._patrolTimer = null;
-      if (this.state !== STATE.IDLE && this.state !== STATE.PATROLLING) return;
+      if (this.state !== STATE.IDLE && this.state !== STATE.PATROLLING) {
+        return;
+      }
 
       if (this.idleBehavior) {
         this.idleBehavior.update();
