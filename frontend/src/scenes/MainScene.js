@@ -9,6 +9,7 @@ import { registerAll, registerAnimations, queueFurnitureLoads } from '../classes
 import OfficeEnvironment from '../classes/OfficeEnvironment.js';
 import IdleBehavior from '../classes/IdleBehavior.js';
 import AgentInteraction from '../classes/AgentInteraction.js';
+import { AgentClickHandler } from '../services/agentClickService.js';
 import socket from '../services/socketService.js';
 
 // World dimensions will be set based on loaded layout
@@ -161,6 +162,7 @@ class MainScene extends Phaser.Scene {
       this._buildAgents();
       this._setupIdleBehaviors();
       this._setupAgentInteraction();
+      this._setupAgentClicking();
       this._setupCamera();
       this._bindSocketHandlers();
     });
@@ -316,6 +318,11 @@ class MainScene extends Phaser.Scene {
     // Create agent interaction system (proximity-based chat)
     this.agentInteraction = new AgentInteraction(this, this.agents);
     this.agentInteraction.start();
+  }
+
+  _setupAgentClicking() {
+    // Create agent click handler for player interactions
+    this.agentClickHandler = new AgentClickHandler(this, this.agents);
   }
 
   // ── Socket event wiring ─────────────────────────────────────────────────────
