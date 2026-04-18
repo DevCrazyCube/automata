@@ -147,19 +147,22 @@ class MainScene extends Phaser.Scene {
     registerAll(this);
   }
 
-  async create() {
+  create() {
     // Set up animations after sprites are loaded
     registerAnimations(this);
 
     // Build office asynchronously (loads layout and furniture)
-    await this._buildOffice();
-
-    // Build agents after office is loaded
-    this._buildAgents();
-    this._setupIdleBehaviors();
-    this._setupAgentInteraction();
-    this._setupCamera();
-    this._bindSocketHandlers();
+    // Use a promise chain instead of async/await for better Phaser compatibility
+    this._buildOffice().then(() => {
+      // Build agents after office is loaded
+      this._buildAgents();
+      this._setupIdleBehaviors();
+      this._setupAgentInteraction();
+      this._setupCamera();
+      this._bindSocketHandlers();
+    }).catch(err => {
+      console.error('Failed to build office:', err);
+    });
 
     // Socket cleanup on scene shutdown (supports HMR).
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this._unbindSocketHandlers());

@@ -39,9 +39,18 @@ export class AssetLoader {
 
   async loadLayout() {
     try {
+      console.log('Loading layout from /assets/default-layout-1.json');
       const response = await fetch('/assets/default-layout-1.json');
+      console.log('Layout response status:', response.status);
       if (response.ok) {
         this.layout = await response.json();
+        console.log('Layout loaded successfully:', {
+          cols: this.layout.cols,
+          rows: this.layout.rows,
+          furniture: this.layout.furniture?.length || 0
+        });
+      } else {
+        console.error('Layout response not ok:', response.status);
       }
     } catch (e) {
       console.error('Failed to load layout:', e);

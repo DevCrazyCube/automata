@@ -18,28 +18,41 @@ export default class OfficeEnvironment {
   }
 
   async build() {
+    console.log('Building office environment...');
     // Load all assets
     await assetLoader.loadAll();
+    console.log('Assets loaded');
+
     this.layout = assetLoader.getLayout();
+    console.log('Layout retrieved:', this.layout ? 'OK' : 'MISSING');
 
     if (!this.layout) {
       console.error('Failed to load layout');
       return this.interactiveObjects;
     }
 
+    console.log('Building catalog...');
     // Build catalog for furniture lookups
     const { catalog_map } = assetLoader.buildCatalog();
     this.catalog_map = catalog_map;
+    console.log('Catalog built with', catalog_map.size, 'entries');
 
+    console.log('Rendering tilemap...');
     // Render tilemap (floor and walls)
     this._renderTilemap();
+    console.log('Tilemap rendered:', this.tileSprites.length, 'tiles');
 
+    console.log('Placing furniture...');
     // Place furniture objects
     this._placeFurniture();
+    console.log('Furniture placed:', this.furnitureSprites.length / 2, 'items');
 
+    console.log('Creating interactive objects...');
     // Create interactive zones for idle behaviors
     this._createInteractiveObjects();
+    console.log('Interactive objects created');
 
+    console.log('Office built successfully');
     return this.interactiveObjects;
   }
 
