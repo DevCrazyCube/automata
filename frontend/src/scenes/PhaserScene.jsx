@@ -1,8 +1,7 @@
 // scenes/PhaserScene.jsx
-// React wrapper around a Phaser.Game. Guards against:
-//   • React StrictMode double-mount (ref sentinel)
-//   • onGameReady identity churn (stored in a ref, not a dep)
-//   • Multiple canvas leaks (destroy(true) on unmount)
+// React wrapper around a Phaser.Game.
+// Uses RESIZE scale mode — Phaser canvas grows to match parent container.
+// Camera zoom is handled by MainScene to fit the office content.
 
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
@@ -15,35 +14,27 @@ function PhaserScene({ onGameReady }) {
   useEffect(() => { onGameReadyRef.current = onGameReady; }, [onGameReady]);
 
   useEffect(() => {
-    // Guard: already mounted
     if (gameRef.current) return undefined;
     if (!containerRef.current) return undefined;
 
-    // Get container dimensions
-    const rect = containerRef.current.getBoundingClientRect();
-    const width = Math.max(rect.width, 800) || 800;
-    const height = Math.max(rect.height, 600) || 600;
-
     const config = {
       type: Phaser.CANVAS,
-      width,
-      height,
       parent: containerRef.current,
       backgroundColor: '#0f172a',
       scene: [MainScene],
       scale: {
-        mode: Phaser.Scale.FIT,
+        // RESIZE: canvas always matches parent container dimensions exactly.
+        // MainScene._setupCamera() calculates zoom to fit office inside it.
+        mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.NO_CENTER,
-        fullscreenTarget: 'parent',
-        expandParent: false,
-        width,
-        height,
+        width: '100%',
+        height: '100%',
       },
       render: {
         antialias: false,
         pixelArt: true,
-        roundPixels: true
-      }
+        roundPixels: true,
+      },
     };
 
     gameRef.current = new Phaser.Game(config);
@@ -51,18 +42,7 @@ function PhaserScene({ onGameReady }) {
       onGameReadyRef.current(gameRef.current);
     }
 
-    // Handle window resize
-    const handleResize = () => {
-      if (gameRef.current && containerRef.current) {
-        const newRect = containerRef.current.getBoundingClientRect();
-        gameRef.current.scale.resize(newRect.width, newRect.height);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-
     return () => {
-      window.removeEventListener('resize', handleResize);
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;
@@ -80,10 +60,6 @@ function PhaserScene({ onGameReady }) {
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
       }}
       className="bg-gray-950"
     />

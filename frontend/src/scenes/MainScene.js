@@ -167,6 +167,11 @@ class MainScene extends Phaser.Scene {
 
     this.load.start();
 
+    // Re-fit camera whenever Phaser RESIZE mode changes canvas dimensions.
+    this.scale.on('resize', () => {
+      if (this.office) this._setupCamera();
+    });
+
     // Socket cleanup on scene shutdown (supports HMR).
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this._unbindSocketHandlers());
     this.events.on(Phaser.Scenes.Events.DESTROY,  () => this._unbindSocketHandlers());
@@ -183,22 +188,41 @@ class MainScene extends Phaser.Scene {
 
   _setupCamera() {
     const cam = this.cameras.main;
-    const W = WORLD_WIDTH;
-    const H = WORLD_HEIGHT;
+    const layout = this.office?.layout;
+    const TILE = 32;
 
-    cam.setBounds(0, 0, W, H);
+    // Compute tight bounding box of non-VOID tiles, then extend 1 row up
+    // to include wall-mounted decorations (hanging plants etc. at row 9).
+    let firstRow = 0, lastRow = 0, lastCol = 0;
+    if (layout) {
+      let found = false;
+      for (let r = 0; r < layout.rows; r++) {
+        for (let c = 0; c < layout.cols; c++) {
+          if (layout.tiles[r * layout.cols + c] !== 255) {
+            if (!found) { firstRow = r; found = true; }
+            lastRow = r;
+            if (c > lastCol) lastCol = c;
+          }
+        }
+      }
+      // One row above the wall to show wall-mounted items
+      firstRow = Math.max(0, firstRow - 1);
+    }
 
-    // Fit entire office in view, leaving room for title at top
-    const titleSpace = 20;
-    const availableWidth = cam.width;
-    const availableHeight = cam.height - titleSpace;
+    const startX = 0;
+    const startY = firstRow * TILE;
+    const contentW = (lastCol + 1) * TILE;           // cols 0..lastCol
+    const contentH = (lastRow - firstRow + 1) * TILE; // rows firstRow..lastRow
 
-    const zoomX = availableWidth / W;
-    const zoomY = availableHeight / H;
-    const zoom = Math.min(zoomX, zoomY);
+    cam.setBounds(startX, startY, contentW, contentH);
 
+    // In RESIZE mode, scale.width/height equal the actual canvas dimensions.
+    const canvasW = this.scale.width;
+    const canvasH = this.scale.height;
+
+    const zoom = Math.min(canvasW / contentW, canvasH / contentH);
     cam.setZoom(zoom);
-    cam.centerOn(W / 2, H / 2);
+    cam.centerOn(startX + contentW / 2, startY + contentH / 2);
   }
 
   // ── Office world construction ───────────────────────────────────────────────
