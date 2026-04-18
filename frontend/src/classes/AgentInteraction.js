@@ -53,13 +53,25 @@ export default class AgentInteraction {
 
     if (this.activeConversations.has(key)) return;
 
-    // Make agents face each other
-    const dx = agent2.container.x - agent1.container.x;
-    const angle = Math.atan2(0, dx); // Just use x difference for left/right
+    // Play conversation animation if available
+    const talkKey1 = `${agent1.agentKey}_talk`;
+    const talkKey2 = `${agent2.agentKey}_talk`;
 
-    // Play conversation animation
-    agent1.scene.anims.play(`${agent1.agentKey}_talk`, agent1.sprite);
-    agent2.scene.anims.play(`${agent2.agentKey}_talk`, agent2.sprite);
+    if (agent1.scene.anims.exists(talkKey1)) {
+      try {
+        agent1.scene.anims.play(talkKey1, agent1.sprite);
+      } catch (e) {
+        console.warn('Failed to play animation:', talkKey1, e);
+      }
+    }
+
+    if (agent2.scene.anims.exists(talkKey2)) {
+      try {
+        agent2.scene.anims.play(talkKey2, agent2.sprite);
+      } catch (e) {
+        console.warn('Failed to play animation:', talkKey2, e);
+      }
+    }
 
     const conversation = {
       agent1, agent2,

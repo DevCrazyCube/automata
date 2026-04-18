@@ -52,7 +52,7 @@ export default class Agent {
 
     // ── Container (all children positioned relative to container origin) ──
     this.container = scene.add.container(x, y);
-    this.container.setDepth(20);
+    this.container.setDepth(25);  // Higher than furniture (depth 5)
 
     // Sprite using pixel-agents character PNG assets
     const spriteKey = `agent_${agentKey}`;
@@ -61,13 +61,14 @@ export default class Agent {
     if (scene.textures.exists(spriteKey)) {
       this.sprite = scene.add.image(0, 0, spriteKey);
       this.sprite.setOrigin(0.5, 0.5);
-      // Scale character sprite to tile-appropriate size
-      // Most character PNGs are around 200-400px wide, we want 32-48px
-      this.sprite.setDisplaySize(48, 48);
+      // Scale character sprite to visible size (64x64 - larger than tiles for visibility)
+      this.sprite.setDisplaySize(64, 64);
+      this.sprite.setDepth(20);
     } else {
-      // Fallback: colored rectangle (tile-sized)
-      this.sprite = scene.add.rectangle(0, 0, 32, 48, tint, 0.9);
+      // Fallback: colored rectangle (larger for visibility)
+      this.sprite = scene.add.rectangle(0, 0, 64, 64, tint, 0.9);
       this.sprite.setOrigin(0.5, 0.5);
+      this.sprite.setDepth(20);
       console.warn(`Sprite not loaded: ${spriteKey}, using placeholder`);
     }
 
