@@ -195,17 +195,6 @@ class MainScene extends Phaser.Scene {
       WORLD_WIDTH = newWidth;
       WORLD_HEIGHT = newHeight;
     }
-
-    // Add title at top
-    const W = WORLD_WIDTH;
-    this.add.text(W / 2, 10, '◈  AUTOMATA  DEFI OPERATIONS CENTER  ◈', {
-      fontSize: '10px',
-      color: '#00aaff',
-      fontFamily: 'monospace',
-      fontStyle: 'bold',
-      stroke: '#001433',
-      strokeThickness: 3,
-    }).setOrigin(0.5, 0.5).setDepth(100);
   }
 
   // ── Agent initialisation ────────────────────────────────────────────────────

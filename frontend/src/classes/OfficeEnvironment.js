@@ -1,15 +1,15 @@
 // classes/OfficeEnvironment.js
-// Renders the office from default-layout-1.json, replicating the pixel-agents
-// rendering approach:
-//   • Floor tiles as 32×32 solid-colored rectangles (colorized via HSL)
-//   • Walls as darker solid tiles
-//   • Furniture as PNG sprites drawn at NATIVE pixel dimensions, anchored
-//     at (col*32, row*32) top-left, depth y-sorted by bottom edge.
+// Renders the office from default-layout-1.json.
+// Art assets are 16px-based (floors 16×16, furniture sized in 16px units).
+// Logic grid is 32px per tile → every sprite renders at SPRITE_SCALE = 2×
+// so footprints map correctly onto the grid and no checker gaps appear.
 
 import InteractiveObject from './InteractiveObject.js';
 import { buildFurnitureCatalog } from './SpriteFactory.js';
 
 const TILE_SIZE = 32;
+const ART_SIZE = 16;
+const SPRITE_SCALE = TILE_SIZE / ART_SIZE;
 const VOID_TILE = 255;
 const WALL_TILE = 0;
 const FALLBACK_FLOOR = 0xd4c9b8;
@@ -58,21 +58,19 @@ export default class OfficeEnvironment {
 
         let tile;
         if (tileType === WALL_TILE) {
-          // Try to use wall sprite; fall back to colored rectangle
-          if (this.scene.textures.exists('wall_0')) {
-            tile = this.scene.add.image(x, y, 'wall_0');
-            tile.setOrigin(0, 0);
-          } else {
-            const color = this._tileColorToHex(tileColors?.[idx]) ?? WALL_COLOR;
-            tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
-            tile.setOrigin(0, 0);
-          }
+          // Walls always render as solid colored tiles. wall_0.png is a
+          // 64×128 tileset, not a single 16×16 tile — drawing it as one
+          // image at each wall cell would produce broken overlap.
+          const color = this._tileColorToHex(tileColors?.[idx]) ?? WALL_COLOR;
+          tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
+          tile.setOrigin(0, 0);
         } else {
-          // Try to use floor sprite; fall back to colored rectangle
+          // Floor sprite (16×16 native) scaled 2× to fill the 32px tile cell.
           const spriteKey = `floor_${Math.min(tileType, 8)}`;
           if (this.scene.textures.exists(spriteKey)) {
             tile = this.scene.add.image(x, y, spriteKey);
             tile.setOrigin(0, 0);
+            tile.setScale(SPRITE_SCALE);
           } else {
             const color = this._floorColor(tileType, tileColors?.[idx]);
             tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
@@ -205,16 +203,15 @@ export default class OfficeEnvironment {
 
       const sprite = this.scene.add.image(x, y, entry.textureKey);
       sprite.setOrigin(0, 0);
+      sprite.setScale(SPRITE_SCALE);
 
       // Mirror horizontally for :left variants
       if (entry.orientation === 'left' && entry.mirrorSide) {
         sprite.setFlipX(true);
       }
 
-      // Depth: y-sort by bottom edge of sprite (matches pixel-agents zY).
-      // Chairs' back-facing variant renders in front of the character;
-      // front/side chairs render behind. For simplicity use bottom edge.
-      const spriteH = entry.height || TILE_SIZE;
+      // Depth: y-sort by bottom edge of scaled sprite (matches pixel-agents zY).
+      const spriteH = (entry.height || ART_SIZE) * SPRITE_SCALE;
       const bottomEdge = y + spriteH;
       sprite.setDepth(bottomEdge);
 

@@ -32,11 +32,11 @@ export function registerAll(scene) {
     });
   }
 
-  // Floor and wall sprites for tilemap rendering
+  // Floor sprites for tilemap rendering (16×16 native, scaled 2× at render).
+  // wall_0.png is a 64×128 tileset — not loaded here; walls render as solid tiles.
   for (let i = 0; i <= 8; i++) {
     scene.load.image(`floor_${i}`, `/assets/floors/floor_${i}.png`);
   }
-  scene.load.image('wall_0', '/assets/walls/wall_0.png');
 
   scene.load.on('loaderror', (file) => {
     console.warn(`Failed to load: ${file.key} (${file.src})`);
