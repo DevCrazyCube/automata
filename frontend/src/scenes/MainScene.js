@@ -12,9 +12,11 @@ import AgentInteraction from '../classes/AgentInteraction.js';
 import { AgentClickHandler } from '../services/agentClickService.js';
 import socket from '../services/socketService.js';
 
-// World dimensions will be set based on grid layout
-let WORLD_WIDTH = 12 * TILE_SIZE;
-let WORLD_HEIGHT = 10 * TILE_SIZE;
+const TILE_SIZE = 32;
+
+// World dimensions will be set based on layout
+let WORLD_WIDTH = 960;
+let WORLD_HEIGHT = 640;
 
 export const setWorldDimensions = (w, h) => {
   WORLD_WIDTH = w;
@@ -137,21 +139,38 @@ class MainScene extends Phaser.Scene {
   }
 
   _setupCamera() {
-    const TILE_SIZE = 32;
     const cam = this.cameras.main;
     const layout = this.office?.layout;
 
     if (!layout) return;
 
-    // Use layout bounds
-    const startX = 0;
-    const startY = 0;
-    const contentW = layout.cols * TILE_SIZE;
-    const contentH = layout.rows * TILE_SIZE;
+    // Find non-void content bounds for better framing
+    const VOID_TILE = 255;
+    let minCol = Infinity, maxCol = -Infinity;
+    let minRow = Infinity, maxRow = -Infinity;
+
+    for (let row = 0; row < layout.rows; row++) {
+      for (let col = 0; col < layout.cols; col++) {
+        const idx = row * layout.cols + col;
+        if (layout.tiles[idx] !== VOID_TILE) {
+          minCol = Math.min(minCol, col);
+          maxCol = Math.max(maxCol, col);
+          minRow = Math.min(minRow, row);
+          maxRow = Math.max(maxRow, row);
+        }
+      }
+    }
+
+    // Use content bounds with small padding
+    const padding = TILE_SIZE;
+    const startX = Math.max(0, minCol * TILE_SIZE - padding);
+    const startY = Math.max(0, minRow * TILE_SIZE - padding);
+    const contentW = (maxCol - minCol + 1) * TILE_SIZE + padding * 2;
+    const contentH = (maxRow - minRow + 1) * TILE_SIZE + padding * 2;
 
     cam.setBounds(startX, startY, contentW, contentH);
 
-    // In RESIZE mode, scale.width/height equal the actual canvas dimensions.
+    // In RESIZE mode, scale.width/height equal the actual canvas dimensions
     const canvasW = this.scale.width;
     const canvasH = this.scale.height;
 
@@ -170,7 +189,6 @@ class MainScene extends Phaser.Scene {
     // Update world dimensions from loaded layout
     const layout = this.office.layout;
     if (layout) {
-      const TILE_SIZE = 32; // Matches layout tile size
       const newWidth = layout.cols * TILE_SIZE;
       const newHeight = layout.rows * TILE_SIZE;
       setWorldDimensions(newWidth, newHeight);
@@ -193,7 +211,6 @@ class MainScene extends Phaser.Scene {
   // ── Agent initialisation ────────────────────────────────────────────────────
 
   _buildAgents() {
-    const TILE_SIZE = 32;
     const agentConfigs = {
       deployer:    { name: 'Deployer',    tint: 0xff5555 },
       distributor: { name: 'Distributor', tint: 0x44ddcc },

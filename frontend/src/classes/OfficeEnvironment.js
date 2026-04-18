@@ -55,16 +55,31 @@ export default class OfficeEnvironment {
 
         const x = col * TILE_SIZE;
         const y = row * TILE_SIZE;
-        let color;
 
+        let tile;
         if (tileType === WALL_TILE) {
-          color = this._tileColorToHex(tileColors?.[idx]) ?? WALL_COLOR;
+          // Try to use wall sprite; fall back to colored rectangle
+          if (this.scene.textures.exists('wall_0')) {
+            tile = this.scene.add.image(x, y, 'wall_0');
+            tile.setOrigin(0, 0);
+          } else {
+            const color = this._tileColorToHex(tileColors?.[idx]) ?? WALL_COLOR;
+            tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
+            tile.setOrigin(0, 0);
+          }
         } else {
-          color = this._floorColor(tileType, tileColors?.[idx]);
+          // Try to use floor sprite; fall back to colored rectangle
+          const spriteKey = `floor_${Math.min(tileType, 8)}`;
+          if (this.scene.textures.exists(spriteKey)) {
+            tile = this.scene.add.image(x, y, spriteKey);
+            tile.setOrigin(0, 0);
+          } else {
+            const color = this._floorColor(tileType, tileColors?.[idx]);
+            tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
+            tile.setOrigin(0, 0);
+          }
         }
 
-        const tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
-        tile.setOrigin(0, 0);
         tile.setDepth(0);
         this.tileSprites.push(tile);
       }
