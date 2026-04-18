@@ -112,7 +112,9 @@ export default class Agent {
 
   _getCharIdx(agentKey) {
     const map = { deployer: 0, distributor: 1, swapper: 2, extractor: 3 };
-    return map[agentKey] ?? 0;
+    const idx = map[agentKey] ?? 0;
+    // Clamp to available sprites 0-5
+    return Math.min(idx, 5);
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────

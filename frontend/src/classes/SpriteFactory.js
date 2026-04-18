@@ -24,7 +24,7 @@ export function registerAll(scene) {
   // Character spritesheets: 112×96 pixels = 7 cols × 3 rows of 16×32 frames
   // Each row represents a direction (down, up, right)
   // Frames per row: 0-2 = walk, 3-4 = typing, 5-6 = reading
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     scene.load.spritesheet(`char_${i}`, `/assets/characters/char_${i}.png`, {
       frameWidth: 16,
       frameHeight: 32,
