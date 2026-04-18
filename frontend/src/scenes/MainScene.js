@@ -35,14 +35,14 @@ const ZONE_MAP = {
 /** Map backend agent index (1-4) to station key. */
 const AGENT_IDX_MAP = { 1: 'deployer', 2: 'distributor', 3: 'swapper', 4: 'extractor' };
 
-/** Resolve a station key from any of: numeric id, string key, agent name. */
-function resolveStationKey(input) {
+/** Resolve an agent key from any of: numeric id, string key. */
+function resolveAgentKey(input) {
   if (input == null) return null;
   if (typeof input === 'number') return AGENT_IDX_MAP[input] || null;
   if (typeof input === 'string') {
     const lower = input.toLowerCase();
-    if (STATIONS[lower]) return lower;
-    if (AGENT_IDX_MAP[lower]) return AGENT_IDX_MAP[lower];
+    if (['deployer', 'distributor', 'swapper', 'extractor'].includes(lower)) return lower;
+    return AGENT_IDX_MAP[lower] || null;
   }
   return null;
 }
@@ -236,13 +236,13 @@ class MainScene extends Phaser.Scene {
     };
 
     on('phase_started', (data) => {
-      const stKey = resolveStationKey(data.agent) || ZONE_MAP[data.zone];
+      const stKey = resolveAgentKey(data.agent) || ZONE_MAP[data.zone];
       const agent = this.agents[stKey];
       if (agent && agent.idleBehavior) agent.idleBehavior.pause();
     });
 
     on('agent_working', (data) => {
-      const stKey = resolveStationKey(data.agent);
+      const stKey = resolveAgentKey(data.agent);
       const agent = this.agents[stKey];
       if (agent) {
         agent.startWorking(data.action, data.progress || 0);
@@ -251,7 +251,7 @@ class MainScene extends Phaser.Scene {
     });
 
     on('agent_thinking', (data) => {
-      const stKey = resolveStationKey(data.agent || data.agentId);
+      const stKey = resolveAgentKey(data.agent || data.agentId);
       const agent = this.agents[stKey];
       if (agent) {
         agent.setChatText('💭 Thinking…');
@@ -260,7 +260,7 @@ class MainScene extends Phaser.Scene {
     });
 
     on('agent_reasoning', (data) => {
-      const stKey = resolveStationKey(data.agent || data.agentId);
+      const stKey = resolveAgentKey(data.agent || data.agentId);
       const agent = this.agents[stKey];
       if (agent && data.text) {
         const snippet = String(data.text).slice(0, 50);
@@ -269,7 +269,7 @@ class MainScene extends Phaser.Scene {
     });
 
     on('agent_action', (data) => {
-      const stKey = resolveStationKey(data.agent || data.agentId);
+      const stKey = resolveAgentKey(data.agent || data.agentId);
       const agent = this.agents[stKey];
       if (agent) {
         agent.startWorking(summarizeAction(data.tool, data.input || {}), 0);
@@ -277,7 +277,7 @@ class MainScene extends Phaser.Scene {
     });
 
     on('agent_message', (data) => {
-      const stKey = resolveStationKey(data.from);
+      const stKey = resolveAgentKey(data.from);
       const agent = this.agents[stKey];
       if (agent && data.message) {
         const snippet = String(data.message).slice(0, 56);
@@ -286,7 +286,7 @@ class MainScene extends Phaser.Scene {
     });
 
     on('agent_yielded', (data) => {
-      const stKey = resolveStationKey(data.agent);
+      const stKey = resolveAgentKey(data.agent);
       const agent = this.agents[stKey];
       if (agent) {
         if (data.done) agent.celebrate();
@@ -295,7 +295,7 @@ class MainScene extends Phaser.Scene {
     });
 
     on('agent_error', (data) => {
-      const stKey = resolveStationKey(data.agent);
+      const stKey = resolveAgentKey(data.agent);
       const agent = this.agents[stKey];
       if (agent) {
         agent.setChatText('⚠ Error');
