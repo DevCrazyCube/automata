@@ -1,58 +1,46 @@
 // classes/OfficeEnvironment.js
-// Build office from layout JSON with proper tilemap, furniture placement, and z-ordering
+// Renders the office from default-layout-1.json, replicating the pixel-agents
+// rendering approach:
+//   • Floor tiles as 32×32 solid-colored rectangles (colorized via HSL)
+//   • Walls as darker solid tiles
+//   • Furniture as PNG sprites drawn at NATIVE pixel dimensions, anchored
+//     at (col*32, row*32) top-left, depth y-sorted by bottom edge.
 
 import InteractiveObject from './InteractiveObject.js';
-import { assetLoader } from './AssetLoader.js';
+import { buildFurnitureCatalog } from './SpriteFactory.js';
 
 const TILE_SIZE = 32;
 const VOID_TILE = 255;
+const WALL_TILE = 0;
+const FALLBACK_FLOOR = 0xd4c9b8;
+const WALL_COLOR = 0x4a5568;
 
 export default class OfficeEnvironment {
   constructor(scene) {
     this.scene = scene;
-    this.interactiveObjects = {};
-    this.furnitureSprites = [];
-    this.tileSprites = [];
     this.layout = null;
-    this.catalog_map = null;
+    this.catalog = null;
+    this.tileSprites = [];
+    this.furnitureSprites = [];
+    this.interactiveObjects = {};
   }
 
-  async build() {
-    console.log('Building office environment...');
-    // Load all assets
-    await assetLoader.loadAll();
-    console.log('Assets loaded');
-
-    this.layout = assetLoader.getLayout();
-    console.log('Layout retrieved:', this.layout ? 'OK' : 'MISSING');
-
+  /** Synchronous build — all assets are already in scene.cache when called. */
+  build() {
+    this.layout = this.scene.cache.json.get('layout');
     if (!this.layout) {
-      console.error('Failed to load layout');
+      console.error('Layout not found in cache');
       return this.interactiveObjects;
     }
 
-    console.log('Building catalog...');
-    // Build catalog for furniture lookups
-    const { catalog_map } = assetLoader.buildCatalog();
-    this.catalog_map = catalog_map;
-    console.log('Catalog built with', catalog_map.size, 'entries');
+    this.catalog = buildFurnitureCatalog(this.scene);
+    console.log(`Catalog built: ${this.catalog.size} furniture entries`);
 
-    console.log('Rendering tilemap...');
-    // Render tilemap (floor and walls)
     this._renderTilemap();
-    console.log('Tilemap rendered:', this.tileSprites.length, 'tiles');
-
-    console.log('Placing furniture...');
-    // Place furniture objects
     this._placeFurniture();
-    console.log('Furniture placed:', this.furnitureSprites.length / 2, 'items');
-
-    console.log('Creating interactive objects...');
-    // Create interactive zones for idle behaviors
     this._createInteractiveObjects();
-    console.log('Interactive objects created');
 
-    console.log('Office built successfully');
+    console.log(`Office built: ${this.tileSprites.length} tiles, ${this.furnitureSprites.length} furniture sprites`);
     return this.interactiveObjects;
   }
 
@@ -61,142 +49,187 @@ export default class OfficeEnvironment {
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        const tileType = tiles[row * cols + col];
+        const idx = row * cols + col;
+        const tileType = tiles[idx];
         if (tileType === VOID_TILE) continue;
 
-        const x = col * TILE_SIZE + TILE_SIZE / 2;
-        const y = row * TILE_SIZE + TILE_SIZE / 2;
-        const color = this._getTileColor(tileColors, col, row, tileType);
+        const x = col * TILE_SIZE;
+        const y = row * TILE_SIZE;
+        let color;
 
-        // Render tile as rectangle
+        if (tileType === WALL_TILE) {
+          color = this._tileColorToHex(tileColors?.[idx]) ?? WALL_COLOR;
+        } else {
+          color = this._floorColor(tileType, tileColors?.[idx]);
+        }
+
         const tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
-        tile.setOrigin(0.5, 0.5);
-        tile.setDepth(1);
+        tile.setOrigin(0, 0);
+        tile.setDepth(0);
         this.tileSprites.push(tile);
       }
     }
   }
 
-  _getTileColor(tileColors, col, row, tileType) {
-    const colorData = tileColors?.[row * this.layout.cols + col];
-
-    if (!colorData) {
-      // Default colors
-      return tileType === 0 ? 0x888888 : 0xd4c9b8;
-    }
-
-    // Convert HSL-like color object to hex
-    return this._hslToHex(colorData);
+  /** Pixel-agents HSL-ish colorization: hue/saturation/brightness/contrast deltas
+   *  applied to a base floor/wall color. Simplified: use the encoded h/s/b as
+   *  HSL directly (b is brightness shift, -100 = black, +100 = white). */
+  _floorColor(tileType, color) {
+    const baseFloors = [
+      0x8a8a8a, // 0 (wall) — not used here
+      0xb8a98e, // 1 — tan floor
+      0xa68d6b, // 2
+      0x9c8a72, // 3
+      0x8e7a5a, // 4
+      0xbaa782, // 5
+      0xa89170, // 6
+      0xc4b391, // 7 — light tan
+      0xa6916f, // 8
+      0x8f7e65, // 9
+    ];
+    const base = baseFloors[tileType] ?? FALLBACK_FLOOR;
+    if (!color) return base;
+    return this._adjustColor(base, color);
   }
 
-  _hslToHex(color) {
-    if (!color || typeof color.h !== 'number') return 0x888888;
+  /** Apply h/s/b/c shifts to a base RGB hex color. */
+  _adjustColor(baseHex, adj) {
+    const r0 = (baseHex >> 16) & 0xff;
+    const g0 = (baseHex >> 8) & 0xff;
+    const b0 = baseHex & 0xff;
 
-    // Simplified HSL to RGB conversion
-    const h = (color.h || 0) / 360;
-    const s = Math.min(Math.max((color.s || 0) / 100, 0), 1);
-    const l = Math.min(Math.max((color.b || 0) / 100, 0), 1);
+    // brightness: -100..+100 → scale toward black/white
+    const bShift = (adj.b || 0) / 100;
+    const sShift = (adj.s || 0) / 100;
 
-    const c = (1 - Math.abs(2 * l - 1)) * s;
-    const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
-    const m = l - c / 2;
+    let r = r0 / 255;
+    let g = g0 / 255;
+    let b = b0 / 255;
 
-    let r = 0, g = 0, b = 0;
-    if (h < 1/6) { r = c; g = x; b = 0; }
-    else if (h < 2/6) { r = x; g = c; b = 0; }
-    else if (h < 3/6) { r = 0; g = c; b = x; }
-    else if (h < 4/6) { r = 0; g = x; b = c; }
-    else if (h < 5/6) { r = x; g = 0; b = c; }
-    else { r = c; g = 0; b = x; }
+    // Apply brightness
+    if (bShift >= 0) {
+      r = r + (1 - r) * bShift;
+      g = g + (1 - g) * bShift;
+      b = b + (1 - b) * bShift;
+    } else {
+      r = r * (1 + bShift);
+      g = g * (1 + bShift);
+      b = b * (1 + bShift);
+    }
 
-    const rr = Math.round((r + m) * 255);
-    const gg = Math.round((g + m) * 255);
-    const bb = Math.round((b + m) * 255);
+    // Apply saturation (shift toward/away from grey)
+    const grey = (r + g + b) / 3;
+    r = grey + (r - grey) * (1 + sShift);
+    g = grey + (g - grey) * (1 + sShift);
+    b = grey + (b - grey) * (1 + sShift);
 
-    return (rr << 16) | (gg << 8) | bb;
+    // Apply hue shift (rotate RGB — very rough but OK for variation)
+    const hShift = ((adj.h || 0) % 360) / 360;
+    if (hShift) {
+      const [rr, gg, bb] = this._rotateHue([r, g, b], hShift);
+      r = rr; g = gg; b = bb;
+    }
+
+    r = Math.max(0, Math.min(1, r));
+    g = Math.max(0, Math.min(1, g));
+    b = Math.max(0, Math.min(1, b));
+
+    return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
+  }
+
+  _rotateHue([r, g, b], amount) {
+    // amount in [0,1]
+    const cosA = Math.cos(amount * Math.PI * 2);
+    const sinA = Math.sin(amount * Math.PI * 2);
+    const matrix = [
+      0.299 + 0.701 * cosA + 0.168 * sinA,
+      0.587 - 0.587 * cosA + 0.330 * sinA,
+      0.114 - 0.114 * cosA - 0.497 * sinA,
+      0.299 - 0.299 * cosA - 0.328 * sinA,
+      0.587 + 0.413 * cosA + 0.035 * sinA,
+      0.114 - 0.114 * cosA + 0.292 * sinA,
+      0.299 - 0.3 * cosA + 1.25 * sinA,
+      0.587 - 0.588 * cosA - 1.05 * sinA,
+      0.114 + 0.886 * cosA - 0.203 * sinA,
+    ];
+    return [
+      r * matrix[0] + g * matrix[1] + b * matrix[2],
+      r * matrix[3] + g * matrix[4] + b * matrix[5],
+      r * matrix[6] + g * matrix[7] + b * matrix[8],
+    ];
+  }
+
+  _tileColorToHex(color) {
+    if (!color) return null;
+    return this._adjustColor(0x5a6b8a, color); // dark wall base
   }
 
   _placeFurniture() {
-    const furniture = assetLoader.getFurnitureList();
+    const furniture = this.layout.furniture || [];
 
     for (const item of furniture) {
-      this._placeFurnitureItem(item);
+      const entry = this.catalog.get(item.type);
+      if (!entry) {
+        console.warn(`No catalog entry for ${item.type}`);
+        continue;
+      }
+
+      if (!this.scene.textures.exists(entry.textureKey)) {
+        console.warn(`Texture missing: ${entry.textureKey}`);
+        continue;
+      }
+
+      const x = item.col * TILE_SIZE;
+      const y = item.row * TILE_SIZE;
+
+      const sprite = this.scene.add.image(x, y, entry.textureKey);
+      sprite.setOrigin(0, 0);
+
+      // Mirror horizontally for :left variants
+      if (entry.orientation === 'left' && entry.mirrorSide) {
+        sprite.setFlipX(true);
+      }
+
+      // Depth: y-sort by bottom edge of sprite (matches pixel-agents zY).
+      // Chairs' back-facing variant renders in front of the character;
+      // front/side chairs render behind. For simplicity use bottom edge.
+      const spriteH = entry.height || TILE_SIZE;
+      const bottomEdge = y + spriteH;
+      sprite.setDepth(bottomEdge);
+
+      this.furnitureSprites.push(sprite);
     }
-  }
-
-  _placeFurnitureItem(item) {
-    const entry = this.catalog_map?.get(item.type);
-    if (!entry) {
-      console.warn(`Furniture not found: ${item.type}`);
-      return;
-    }
-
-    const x = item.col * TILE_SIZE + TILE_SIZE / 2;
-    const y = item.row * TILE_SIZE + TILE_SIZE / 2;
-
-    // Create a placeholder for furniture (colored rectangle with label)
-    const furnitureSprite = this.scene.add.rectangle(
-      x, y,
-      entry.footprintW * TILE_SIZE,
-      entry.footprintH * TILE_SIZE,
-      0x6b5437
-    );
-    furnitureSprite.setOrigin(0.5, 0.5);
-    furnitureSprite.setDepth(5);
-    furnitureSprite.setStrokeStyle(1, 0x8b7355);
-
-    // Add label
-    const label = this.scene.add.text(x, y, entry.id.split('_')[0], {
-      fontSize: '8px',
-      color: '#cccccc',
-      fontFamily: 'monospace'
-    });
-    label.setOrigin(0.5, 0.5);
-    label.setDepth(6);
-
-    this.furnitureSprites.push(furnitureSprite);
-    this.furnitureSprites.push(label);
   }
 
   _createInteractiveObjects() {
-    // Create interactive zones at strategic locations
-    // These can be referenced by idle behaviors
-
-    // Find coffee and other key furniture in layout
-    const furniture = assetLoader.getFurnitureList();
+    const furniture = this.layout.furniture || [];
 
     for (const item of furniture) {
-      const type = item.type.split(':')[0]; // Remove :left variants
+      const typeKey = item.type.split(':')[0];
       const x = item.col * TILE_SIZE + TILE_SIZE / 2;
       const y = item.row * TILE_SIZE + TILE_SIZE / 2;
 
-      if (type === 'COFFEE' && !this.interactiveObjects.coffee) {
+      if (typeKey.startsWith('COFFEE') && !this.interactiveObjects.coffee) {
         this.interactiveObjects.coffee = new InteractiveObject(this.scene, x, y, 'coffee');
-      } else if (type === 'SOFA' && !this.interactiveObjects.couch) {
+      } else if (typeKey.startsWith('SOFA') && !this.interactiveObjects.couch) {
         this.interactiveObjects.couch = new InteractiveObject(this.scene, x, y, 'couch');
-      } else if ((type === 'SMALL_TABLE' || type === 'TABLE') && !this.interactiveObjects.table) {
-        this.interactiveObjects.table = new InteractiveObject(this.scene, x, y, 'table');
-      } else if (type === 'WHITEBOARD' && !this.interactiveObjects.whiteboard) {
+      } else if (typeKey.startsWith('TABLE') || typeKey.startsWith('SMALL_TABLE')) {
+        if (!this.interactiveObjects.table) {
+          this.interactiveObjects.table = new InteractiveObject(this.scene, x, y, 'table');
+        }
+      } else if (typeKey === 'WHITEBOARD' && !this.interactiveObjects.whiteboard) {
         this.interactiveObjects.whiteboard = new InteractiveObject(this.scene, x, y, 'whiteboard');
       }
     }
 
-    // Create fallback objects if not found
-    if (!this.interactiveObjects.coffee) {
-      this.interactiveObjects.coffee = new InteractiveObject(this.scene, 200, 400, 'coffee');
-    }
-    if (!this.interactiveObjects.couch) {
-      this.interactiveObjects.couch = new InteractiveObject(this.scene, 400, 200, 'couch');
-    }
-    if (!this.interactiveObjects.table) {
-      this.interactiveObjects.table = new InteractiveObject(this.scene, 300, 500, 'table');
-    }
-    if (!this.interactiveObjects.whiteboard) {
-      this.interactiveObjects.whiteboard = new InteractiveObject(this.scene, 150, 300, 'whiteboard');
-    }
-    if (!this.interactiveObjects.water_cooler) {
-      this.interactiveObjects.water_cooler = new InteractiveObject(this.scene, 600, 500, 'water_cooler');
-    }
+    // Fallbacks so idle behavior has something to target
+    const cx = (this.layout.cols * TILE_SIZE) / 2;
+    const cy = (this.layout.rows * TILE_SIZE) / 2;
+    if (!this.interactiveObjects.coffee)     this.interactiveObjects.coffee     = new InteractiveObject(this.scene, cx, cy, 'coffee');
+    if (!this.interactiveObjects.couch)      this.interactiveObjects.couch      = new InteractiveObject(this.scene, cx, cy, 'couch');
+    if (!this.interactiveObjects.table)      this.interactiveObjects.table      = new InteractiveObject(this.scene, cx, cy, 'table');
+    if (!this.interactiveObjects.whiteboard) this.interactiveObjects.whiteboard = new InteractiveObject(this.scene, cx, cy, 'whiteboard');
+    if (!this.interactiveObjects.water_cooler) this.interactiveObjects.water_cooler = new InteractiveObject(this.scene, cx, cy, 'water_cooler');
   }
 
   destroy() {

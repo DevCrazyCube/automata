@@ -5,7 +5,7 @@
 
 import Phaser from 'phaser';
 import Agent from '../classes/Agent.js';
-import { registerAll, registerAnimations } from '../classes/SpriteFactory.js';
+import { registerAll, registerAnimations, queueFurnitureLoads } from '../classes/SpriteFactory.js';
 import OfficeEnvironment from '../classes/OfficeEnvironment.js';
 import IdleBehavior from '../classes/IdleBehavior.js';
 import AgentInteraction from '../classes/AgentInteraction.js';
@@ -20,7 +20,6 @@ export const setWorldDimensions = (w, h) => {
   WORLD_HEIGHT = h;
 };
 
-// Export for external use (though canvas uses fixed dimensions)
 export const getWorldDimensions = () => ({ width: WORLD_WIDTH, height: WORLD_HEIGHT });
 
 // Workstation layout constants
@@ -148,21 +147,25 @@ class MainScene extends Phaser.Scene {
   }
 
   create() {
-    // Set up animations after sprites are loaded
     registerAnimations(this);
 
-    // Build office asynchronously (loads layout and furniture)
-    // Use a promise chain instead of async/await for better Phaser compatibility
-    this._buildOffice().then(() => {
-      // Build agents after office is loaded
+    // Phase 1: Build manifests are cached from preload.
+    // Queue furniture PNG loads based on manifest data.
+    console.log('Queuing furniture loads...');
+    queueFurnitureLoads(this);
+
+    // Phase 2: Once furniture PNGs load, build the office and agents
+    this.load.once('complete', () => {
+      console.log('Furniture loads complete, building office...');
+      this._buildOffice();
       this._buildAgents();
       this._setupIdleBehaviors();
       this._setupAgentInteraction();
       this._setupCamera();
       this._bindSocketHandlers();
-    }).catch(err => {
-      console.error('Failed to build office:', err);
     });
+
+    this.load.start();
 
     // Socket cleanup on scene shutdown (supports HMR).
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this._unbindSocketHandlers());
@@ -197,10 +200,10 @@ class MainScene extends Phaser.Scene {
 
   // ── Office world construction ───────────────────────────────────────────────
 
-  async _buildOffice() {
+  _buildOffice() {
     // Create office environment with tilemap and furniture
     this.office = new OfficeEnvironment(this);
-    await this.office.build();
+    this.office.build();
 
     // Update world dimensions from loaded layout
     const layout = this.office.layout;
@@ -227,36 +230,38 @@ class MainScene extends Phaser.Scene {
   // ── Agent initialisation ────────────────────────────────────────────────────
 
   _buildAgents() {
-    // Place 4 agents at desks from layout
-    // Find DESK_FRONT positions and assign agents
     const TILE_SIZE = 32;
+    const DESK_HEIGHT = 32;
+
+    // Find DESK_FRONT positions and position agents just in front
     const deskPositions = [];
     const furniture = this.office.layout?.furniture || [];
 
     for (const item of furniture) {
       if (item.type === 'DESK_FRONT') {
+        // Position agent at center of desk, slightly below (in front of desk)
         deskPositions.push({
-          x: item.col * TILE_SIZE,
-          y: item.row * TILE_SIZE
+          x: item.col * TILE_SIZE + TILE_SIZE * 1.5,  // center of 3-tile-wide desk
+          y: item.row * TILE_SIZE + DESK_HEIGHT + 8   // below desk
         });
       }
     }
 
-    // If we don't have enough desks, use fallback positions
+    // Fallback if not enough desks found
     if (deskPositions.length < 4) {
       deskPositions.push(
-        { x: 2 * TILE_SIZE, y: 12 * TILE_SIZE },
-        { x: 6 * TILE_SIZE, y: 12 * TILE_SIZE },
-        { x: 2 * TILE_SIZE, y: 16 * TILE_SIZE },
-        { x: 6 * TILE_SIZE, y: 16 * TILE_SIZE }
+        { x: 2 * TILE_SIZE + TILE_SIZE, y: 12 * TILE_SIZE + DESK_HEIGHT + 8 },
+        { x: 6 * TILE_SIZE + TILE_SIZE, y: 12 * TILE_SIZE + DESK_HEIGHT + 8 },
+        { x: 2 * TILE_SIZE + TILE_SIZE, y: 16 * TILE_SIZE + DESK_HEIGHT + 8 },
+        { x: 6 * TILE_SIZE + TILE_SIZE, y: 16 * TILE_SIZE + DESK_HEIGHT + 8 }
       );
     }
 
     const agentPositions = {
-      deployer:    deskPositions[0] || { x: 64, y: 384 },
-      distributor: deskPositions[1] || { x: 192, y: 384 },
-      swapper:     deskPositions[2] || { x: 64, y: 512 },
-      extractor:   deskPositions[3] || { x: 192, y: 512 },
+      deployer:    deskPositions[0] || { x: 80, y: 400 },
+      distributor: deskPositions[1] || { x: 208, y: 400 },
+      swapper:     deskPositions[2] || { x: 80, y: 528 },
+      extractor:   deskPositions[3] || { x: 208, y: 528 },
     };
 
     const agentConfigs = {

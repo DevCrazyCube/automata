@@ -1,67 +1,114 @@
 // classes/SpriteFactory.js
-// Load sprites and setup animations following pixel-agents pattern
+// Queues all asset loads (layout JSON, furniture manifests, character PNGs).
+// Furniture PNGs are loaded in a second pass after manifests are available —
+// call `queueFurnitureLoads(scene)` from create() and then `scene.load.start()`.
 
-const TILE_SIZE = 32;
+const FURNITURE_TYPES = [
+  'BIN', 'BOOKSHELF', 'CACTUS', 'CLOCK', 'COFFEE', 'COFFEE_TABLE',
+  'CUSHIONED_BENCH', 'CUSHIONED_CHAIR', 'DESK', 'DOUBLE_BOOKSHELF',
+  'HANGING_PLANT', 'LARGE_PAINTING', 'LARGE_PLANT', 'PC', 'PLANT',
+  'PLANT_2', 'POT', 'SMALL_PAINTING', 'SMALL_PAINTING_2', 'SMALL_TABLE',
+  'SOFA', 'TABLE_FRONT', 'WHITEBOARD', 'WOODEN_BENCH', 'WOODEN_CHAIR',
+];
 
+export { FURNITURE_TYPES };
+
+/** Phase 1 (preload): queue layout, manifests, and character spritesheets. */
 export function registerAll(scene) {
-  // Load character PNGs (each is a full sprite sheet)
-  scene.load.image('agent_deployer', '/assets/characters/char_0.png');
-  scene.load.image('agent_distributor', '/assets/characters/char_1.png');
-  scene.load.image('agent_swapper', '/assets/characters/char_2.png');
-  scene.load.image('agent_extractor', '/assets/characters/char_3.png');
+  scene.load.json('layout', '/assets/default-layout-1.json');
 
-  // Load floor tilesets
-  for (let i = 1; i <= 9; i++) {
-    scene.load.image(`floor_${i}`, `/assets/floors/${i}.png`);
+  for (const type of FURNITURE_TYPES) {
+    scene.load.json(`manifest_${type}`, `/assets/furniture/${type}/manifest.json`);
   }
 
-  // Load wall tilesets
-  scene.load.image('wall_dark', '/assets/walls/wall_0.png');
+  // Character PNGs: 112×96 spritesheets → 7 cols × 3 rows of 16×32 frames
+  // Row 0 = down, row 1 = up, row 2 = right
+  // Frames 0-2 = walk cycle, 3-4 = typing, 5-6 = reading
+  for (let i = 0; i < 4; i++) {
+    scene.load.spritesheet(`char_${i}`, `/assets/characters/char_${i}.png`, {
+      frameWidth: 16,
+      frameHeight: 32,
+    });
+  }
 
-  // Handle load errors - create fallbacks
   scene.load.on('loaderror', (file) => {
-    console.warn(`Failed to load: ${file.key}`);
-  });
-
-  scene.load.on('complete', () => {
-    createFallbackSprites(scene);
+    console.warn(`Failed to load: ${file.key} (${file.src})`);
   });
 }
 
-function createFallbackSprites(scene) {
-  const agents = {
-    deployer: 0xff5555,
-    distributor: 0x44ddcc,
-    swapper: 0xffdd44,
-    extractor: 0x88eedd
-  };
+/** Phase 2 (create): queue furniture PNG loads based on loaded manifests.
+ *  Caller must `scene.load.once('complete', cb).start()` after calling this. */
+export function queueFurnitureLoads(scene) {
+  let queued = 0;
+  for (const type of FURNITURE_TYPES) {
+    const manifest = scene.cache.json.get(`manifest_${type}`);
+    if (!manifest) {
+      console.warn(`No manifest for ${type}`);
+      continue;
+    }
 
-  for (const [agentKey, color] of Object.entries(agents)) {
-    const key = `agent_${agentKey}`;
-    if (!scene.textures.exists(key)) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 32;
-      canvas.height = 64;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
-      ctx.fillRect(0, 0, 32, 64);
-      scene.textures.addCanvas(key, canvas);
+    if (manifest.type === 'asset') {
+      // Single-asset manifest (e.g. TABLE_FRONT, CLOCK)
+      const file = manifest.file || `${manifest.id}.png`;
+      scene.load.image(`furn_${manifest.id}`, `/assets/furniture/${type}/${file}`);
+      queued++;
+    } else if (Array.isArray(manifest.members)) {
+      // Group manifest (e.g. DESK, PC, SOFA) — load each member PNG
+      for (const member of manifest.members) {
+        if (!member.file) continue;
+        scene.load.image(`furn_${member.id}`, `/assets/furniture/${type}/${member.file}`);
+        queued++;
+      }
     }
   }
+  return queued;
+}
 
-  // Floor tile fallback
-  if (!scene.textures.exists('floor_tile')) {
-    const canvas = document.createElement('canvas');
-    canvas.width = TILE_SIZE;
-    canvas.height = TILE_SIZE;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#d4c9b8';
-    ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-    scene.textures.addCanvas('floor_tile', canvas);
+/** Build a lookup map: furnitureId → { key, footprintW, footprintH, orientation, mirrorSide, ... } */
+export function buildFurnitureCatalog(scene) {
+  const catalog = new Map();
+  for (const type of FURNITURE_TYPES) {
+    const manifest = scene.cache.json.get(`manifest_${type}`);
+    if (!manifest) continue;
+
+    if (manifest.type === 'asset') {
+      catalog.set(manifest.id, {
+        groupId: type,
+        textureKey: `furn_${manifest.id}`,
+        footprintW: manifest.footprintW || 1,
+        footprintH: manifest.footprintH || 1,
+        width: manifest.width,
+        height: manifest.height,
+        orientation: 'front',
+        mirrorSide: false,
+        category: manifest.category || 'misc',
+        backgroundTiles: manifest.backgroundTiles || 0,
+      });
+    } else if (Array.isArray(manifest.members)) {
+      for (const member of manifest.members) {
+        const base = {
+          groupId: type,
+          textureKey: `furn_${member.id}`,
+          footprintW: member.footprintW || 1,
+          footprintH: member.footprintH || 1,
+          width: member.width,
+          height: member.height,
+          orientation: member.orientation || 'front',
+          mirrorSide: Boolean(member.mirrorSide),
+          category: manifest.category || 'misc',
+          backgroundTiles: manifest.backgroundTiles || 0,
+        };
+        catalog.set(member.id, base);
+        // Virtual :left entry for mirrored side variants
+        if (member.mirrorSide && member.orientation === 'side') {
+          catalog.set(`${member.id}:left`, { ...base, orientation: 'left' });
+        }
+      }
+    }
   }
+  return catalog;
 }
 
 export function registerAnimations(scene) {
-  // For now, animations are handled via texture swaps, not frame-based
-  // When we have sprite sheets, this will create proper animations
+  // Reserved for frame-based animations (not currently needed).
 }
