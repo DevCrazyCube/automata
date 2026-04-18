@@ -197,6 +197,10 @@ export default class Agent {
 
   // ── Frame update (called from scene) ──
   update(time) {
+    // Y-based depth: agents render in front/behind based on their vertical position.
+    // Depth = Y position means agents at lower screen positions render in front.
+    this.container.setDepth(Math.round(this.container.y));
+
     if (this.state === STATE.IDLE || this.state === STATE.PATROLLING) {
       if (this.idleBehavior) {
         this.idleBehavior.update();
@@ -272,7 +276,7 @@ export default class Agent {
       x: tx,
       y: ty,
       duration,
-      ease: 'Sine.easeInOut',
+      ease: 'Linear',
       onComplete: () => {
         this._stopWalkAnim();
         this._setFrame(0);
@@ -361,7 +365,7 @@ export default class Agent {
     const tx = Phaser.Math.Clamp(cx + dx, this.homeX - PATROL_STEP_MAX, this.homeX + PATROL_STEP_MAX);
     const ty = Phaser.Math.Clamp(cy + dy, this.homeY - PATROL_STEP_MAX / 2, this.homeY + PATROL_STEP_MAX / 2);
     const dist = Phaser.Math.Distance.Between(cx, cy, tx, ty);
-    const dur  = Phaser.Math.Clamp(dist * 9, 200, 700);
+    const dur  = Phaser.Math.Clamp(dist * 5, 150, 500);
 
     this._walkTo(tx, ty, dur, () => {
       this.state = STATE.IDLE;
