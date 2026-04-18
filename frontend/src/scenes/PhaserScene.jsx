@@ -8,39 +8,41 @@ import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
 import MainScene from './MainScene.js';
 
-// Canvas dimensions: 21 cols × 22 rows × 32px = 672×704
-// Match office size to fill container properly
-const CANVAS_WIDTH = 672;
-const CANVAS_HEIGHT = 704;
-
 function PhaserScene({ onGameReady }) {
   const containerRef = useRef(null);
   const gameRef = useRef(null);
-  // Store callback in a ref so changing it never re-runs the effect.
   const onGameReadyRef = useRef(onGameReady);
   useEffect(() => { onGameReadyRef.current = onGameReady; }, [onGameReady]);
 
   useEffect(() => {
-    // Guard: already mounted (covers React StrictMode double-invoke).
+    // Guard: already mounted
     if (gameRef.current) return undefined;
     if (!containerRef.current) return undefined;
 
+    // Get container dimensions
+    const rect = containerRef.current.getBoundingClientRect();
+    const width = Math.max(rect.width, 800) || 800;
+    const height = Math.max(rect.height, 600) || 600;
+
     const config = {
-      type: Phaser.CANVAS,       // Force CANVAS — avoids WebGL context-loss flicker on resize.
-      width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
+      type: Phaser.CANVAS,
+      width,
+      height,
       parent: containerRef.current,
       backgroundColor: '#0f172a',
       scene: [MainScene],
       scale: {
-        mode: Phaser.Scale.RESIZE,
+        mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         fullscreenTarget: 'parent',
+        expandParent: true,
+        width,
+        height,
       },
       render: {
-        antialias: false,        // Pixel art — no anti-aliasing.
+        antialias: false,
         pixelArt: true,
-        roundPixels: true        // Eliminates sub-pixel shimmer.
+        roundPixels: true
       }
     };
 
@@ -49,20 +51,37 @@ function PhaserScene({ onGameReady }) {
       onGameReadyRef.current(gameRef.current);
     }
 
+    // Handle window resize
+    const handleResize = () => {
+      if (gameRef.current && containerRef.current) {
+        const newRect = containerRef.current.getBoundingClientRect();
+        gameRef.current.scale.resize(newRect.width, newRect.height);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
     return () => {
+      window.removeEventListener('resize', handleResize);
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;
       }
     };
-  }, []); // Empty deps — run once per mount lifecycle only.
+  }, []);
 
   return (
     <div
       id="phaser-container"
       ref={containerRef}
-      style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'stretch', flex: 1, minHeight: 0 }}
-      className="w-full bg-gray-950"
+      style={{
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden'
+      }}
+      className="bg-gray-950"
     />
   );
 }
