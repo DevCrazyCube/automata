@@ -5,21 +5,21 @@
 import { STATE } from './Agent.js';
 
 const CONVERSATION_STARTERS = [
-  'Checking on pool...',
-  'Market looks good 📈',
-  'Liquidity stable',
-  'All systems green',
-  'Yields looking solid',
-  'Swap queue clear',
-  'LP positions healthy',
-  'Gas prices low 🚀',
-  'Contract verified',
-  'Audit passed!',
-  'TVL increasing',
-  'Mint running smooth',
-  'No anomalies',
-  'Volume spike!',
-  'Charts looking nice',
+  'How\'s your day going?',
+  'Did you hear about that?',
+  'Pretty crazy stuff lately',
+  'What have you been up to?',
+  'Have you seen the news?',
+  'Things are getting wild',
+  'Tell me about your week',
+  'Any interesting updates?',
+  'What do you think about it?',
+  'Heard anything new?',
+  'Things are looking up',
+  'It\'s been quite a day',
+  'What\'s your take on it?',
+  'You catch that story?',
+  'Pretty wild developments',
 ];
 
 function getRandomConversation() {
