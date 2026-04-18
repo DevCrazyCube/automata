@@ -2,6 +2,30 @@
 // Manages proximity-based interactions between agents.
 // When 2+ agents are nearby and idle, they face each other and play conversation animations.
 
+import { STATE } from './Agent.js';
+
+const CONVERSATION_STARTERS = [
+  'Checking on pool...',
+  'Market looks good 📈',
+  'Liquidity stable',
+  'All systems green',
+  'Yields looking solid',
+  'Swap queue clear',
+  'LP positions healthy',
+  'Gas prices low 🚀',
+  'Contract verified',
+  'Audit passed!',
+  'TVL increasing',
+  'Mint running smooth',
+  'No anomalies',
+  'Volume spike!',
+  'Charts looking nice',
+];
+
+function getRandomConversation() {
+  return CONVERSATION_STARTERS[Math.floor(Math.random() * CONVERSATION_STARTERS.length)];
+}
+
 export default class AgentInteraction {
   constructor(scene, agents) {
     this.scene = scene;
@@ -38,7 +62,7 @@ export default class AgentInteraction {
 
   _shouldConverse(agent1, agent2) {
     // Only converse if both are idle
-    if (agent1.state !== 'idle' || agent2.state !== 'idle') return false;
+    if (agent1.state !== STATE.IDLE || agent2.state !== STATE.IDLE) return false;
 
     // Check distance (within 128 pixels)
     const dx = agent1.container.x - agent2.container.x;
@@ -77,12 +101,13 @@ export default class AgentInteraction {
       agent1, agent2,
       startTime: Date.now(),
       endTime: Date.now() + (8000 + Math.random() * 4000), // 8-12 seconds
+      message: getRandomConversation(),
     };
 
     this.activeConversations.set(key, conversation);
 
-    agent1.setChatText('Chatting…');
-    agent2.setChatText('Chatting…');
+    agent1.setChatText(conversation.message);
+    agent2.setChatText(conversation.message);
   }
 
   _endConversation(agent1, agent2) {
@@ -97,13 +122,13 @@ export default class AgentInteraction {
     this.activeConversations.delete(key);
 
     // Reset animations if still idle
-    if (agent1.state === 'idle') {
+    if (agent1.state === STATE.IDLE) {
       agent1.hideChat();
-      agent1._setSprite(`agent_${agent1.agentKey}_idle`);
+      agent1._setFrame(0);
     }
-    if (agent2.state === 'idle') {
+    if (agent2.state === STATE.IDLE) {
       agent2.hideChat();
-      agent2._setSprite(`agent_${agent2.agentKey}_idle`);
+      agent2._setFrame(0);
     }
   }
 

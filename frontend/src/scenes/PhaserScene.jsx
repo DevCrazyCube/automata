@@ -61,8 +61,8 @@ function PhaserScene({ onGameReady }) {
     <div
       id="phaser-container"
       ref={containerRef}
-      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      className="flex-1 min-h-0 w-full bg-gray-950"
+      style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'stretch', flex: 1, minHeight: 0 }}
+      className="w-full bg-gray-950"
     />
   );
 }
