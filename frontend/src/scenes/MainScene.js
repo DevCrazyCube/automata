@@ -6,11 +6,10 @@
 import Phaser from 'phaser';
 import Agent from '../classes/Agent.js';
 import { registerAll, registerAnimations, queueFurnitureLoads } from '../classes/SpriteFactory.js';
-import GridOffice from '../classes/GridOffice.js';
+import OfficeEnvironment from '../classes/OfficeEnvironment.js';
 import IdleBehavior from '../classes/IdleBehavior.js';
 import AgentInteraction from '../classes/AgentInteraction.js';
 import { AgentClickHandler } from '../services/agentClickService.js';
-import { gridToPixel, AGENT_STARTING_POSITIONS, TILE_SIZE } from '../services/officeLayoutService.js';
 import socket from '../services/socketService.js';
 
 // World dimensions will be set based on grid layout
@@ -32,16 +31,17 @@ const ZONE_MAP = {
   extraction:   'extractor',
 };
 
-/** Map backend agent index (1-4) to station key. */
+/** Map backend agent index (1-4) to agent key. */
 const AGENT_IDX_MAP = { 1: 'deployer', 2: 'distributor', 3: 'swapper', 4: 'extractor' };
 
-/** Resolve an agent key from any of: numeric id, string key. */
+/** Resolve an agent key from any of: numeric id, string key, zone name. */
 function resolveAgentKey(input) {
   if (input == null) return null;
   if (typeof input === 'number') return AGENT_IDX_MAP[input] || null;
   if (typeof input === 'string') {
     const lower = input.toLowerCase();
     if (['deployer', 'distributor', 'swapper', 'extractor'].includes(lower)) return lower;
+    if (ZONE_MAP[lower]) return ZONE_MAP[lower];
     return AGENT_IDX_MAP[lower] || null;
   }
   return null;
@@ -137,12 +137,13 @@ class MainScene extends Phaser.Scene {
   }
 
   _setupCamera() {
+    const TILE_SIZE = 32;
     const cam = this.cameras.main;
     const layout = this.office?.layout;
 
     if (!layout) return;
 
-    // Grid-based bounds
+    // Use layout bounds
     const startX = 0;
     const startY = 0;
     const contentW = layout.cols * TILE_SIZE;
@@ -162,13 +163,14 @@ class MainScene extends Phaser.Scene {
   // ── Office world construction ───────────────────────────────────────────────
 
   _buildOffice() {
-    // Create grid-based office with furniture
-    this.office = new GridOffice(this);
+    // Create office from layout JSON (loaded via Phaser cache in preload)
+    this.office = new OfficeEnvironment(this);
     this.office.build();
 
-    // Update world dimensions from layout
+    // Update world dimensions from loaded layout
     const layout = this.office.layout;
     if (layout) {
+      const TILE_SIZE = 32; // Matches layout tile size
       const newWidth = layout.cols * TILE_SIZE;
       const newHeight = layout.rows * TILE_SIZE;
       setWorldDimensions(newWidth, newHeight);
@@ -191,7 +193,7 @@ class MainScene extends Phaser.Scene {
   // ── Agent initialisation ────────────────────────────────────────────────────
 
   _buildAgents() {
-    // Use grid-based starting positions
+    const TILE_SIZE = 32;
     const agentConfigs = {
       deployer:    { name: 'Deployer',    tint: 0xff5555 },
       distributor: { name: 'Distributor', tint: 0x44ddcc },
@@ -199,11 +201,20 @@ class MainScene extends Phaser.Scene {
       extractor:   { name: 'Extractor',   tint: 0x88eedd },
     };
 
+    // Get spawn positions from layout JSON
+    const layout = this.office?.layout;
+    const spawnPositions = layout?.agentSpawnPositions || {};
+
     for (const [agentKey, config] of Object.entries(agentConfigs)) {
-      const posData = AGENT_STARTING_POSITIONS[agentKey];
-      const pos = gridToPixel(posData.col, posData.row);
+      const spawn = spawnPositions[agentKey];
+      if (!spawn) {
+        console.warn(`No spawn position for agent: ${agentKey}`);
+        continue;
+      }
+      const x = spawn.col * TILE_SIZE + TILE_SIZE / 2;
+      const y = spawn.row * TILE_SIZE + TILE_SIZE / 2;
       this.agents[agentKey] = new Agent(
-        this, pos.x, pos.y,
+        this, x, y,
         config.name, agentKey, config.tint
       );
     }

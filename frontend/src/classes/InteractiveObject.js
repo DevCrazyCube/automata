@@ -1,6 +1,7 @@
 // classes/InteractiveObject.js
-// Manages interactive objects like coffee machines, couches, tables, whiteboards.
-// Agents pathfind to objects, play interaction animations, and automatically return.
+// Manages interaction anchors and behavior (no visible sprites).
+// Agents pathfind to interaction points, play animations, and return.
+// Furniture sprites are rendered by OfficeEnvironment only.
 
 import Phaser from 'phaser';
 
@@ -11,42 +12,11 @@ export default class InteractiveObject {
     this.y = y;
     this.type = type; // 'coffee', 'couch', 'table', 'whiteboard', 'water_cooler'
     this.interactionRadius = options.radius || 64;
-    this.sprite = null;
     this.agentsNearby = new Set();
     this.agentsInteracting = new Map(); // agent → { state, timer }
 
-    this._createSprite();
-  }
-
-  _createSprite() {
-    const spriteKey = this._getSpriteKey();
-    if (this.scene.textures.exists(spriteKey)) {
-      const scale = this._getScale();
-      this.sprite = this.scene.add.image(this.x, this.y, spriteKey)
-        .setOrigin(0.5, 0.5)
-        .setScale(scale)
-        .setDepth(10);
-    }
-  }
-
-  _getSpriteKey() {
-    switch (this.type) {
-      case 'coffee': return 'coffee_machine';
-      case 'couch': return 'couch_64x32';
-      case 'table': return 'table';
-      case 'whiteboard': return 'whiteboard';
-      case 'water_cooler': return 'water_cooler';
-      default: return 'desk';
-    }
-  }
-
-  _getScale() {
-    switch (this.type) {
-      case 'couch': return 2.0;
-      case 'whiteboard': return 2.0;
-      case 'bookshelf': return 1.5;
-      default: return 1.0;
-    }
+    // No sprite creation — furniture is rendered by OfficeEnvironment
+    // This class is logic-only: interaction anchors, not visible objects
   }
 
   // Check if agent is in interaction radius
