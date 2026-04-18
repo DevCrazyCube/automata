@@ -21,13 +21,14 @@ export function registerAll(scene) {
     scene.load.json(`manifest_${type}`, `/assets/furniture/${type}/manifest.json`);
   }
 
-  // Character PNGs: 112×96 spritesheets → 7 cols × 3 rows of 16×32 frames
-  // Row 0 = down, row 1 = up, row 2 = right
-  // Frames 0-2 = walk cycle, 3-4 = typing, 5-6 = reading
+  // Character spritesheets: 112×96 pixels = 7 cols × 3 rows of 16×32 frames
+  // Each row represents a direction (down, up, right)
+  // Frames per row: 0-2 = walk, 3-4 = typing, 5-6 = reading
   for (let i = 0; i < 4; i++) {
     scene.load.spritesheet(`char_${i}`, `/assets/characters/char_${i}.png`, {
       frameWidth: 16,
       frameHeight: 32,
+      endFrame: 20  // 3 rows × 7 cols = 21 frames (0-20)
     });
   }
 

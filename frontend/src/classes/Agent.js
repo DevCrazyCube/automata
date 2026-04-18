@@ -1,12 +1,11 @@
 // classes/Agent.js
-// Full-featured pixel-art agent with:
-//   • Idle patrol:  walks short random paths around the home workstation
-//   • Working pose: seated "typing" animation at the desk
-//   • Walking:      2-frame walk cycle tween to destination
-//   • Celebrating:  bounce + spin on phase complete
-//   • Speech bubble and progress bar
-// Uses a Phaser.GameObjects.Container so all sub-objects move together —
-// eliminating the syncChildren() flicker of the previous implementation.
+// Pixel-art agent that walks, works, and celebrates.
+// Uses character spritesheets loaded as frame grids: 112×96 = 7 cols × 3 rows of 16×32.
+// Frame layout per spritesheet:
+//   Row 0 (down):    [0-2] walk, [3-4] typing, [5-6] reading
+//   Row 1 (up):      [7-9] walk, [10-11] typing, [12-13] reading
+//   Row 2 (right):   [14-16] walk, [17-18] typing, [19-20] reading
+// Left frames are flipped horizontally.
 
 import Phaser from 'phaser';
 
@@ -18,21 +17,13 @@ export const STATE = {
   CELEBRATING: 'celebrating',
 };
 
-const WALK_FRAME_INTERVAL_MS = 180; // how often to swap walk frames
+const WALK_FRAME_INTERVAL_MS = 180;
 const PATROL_STEP_MIN = 16;
 const PATROL_STEP_MAX = 48;
 const PATROL_PAUSE_MIN = 600;
 const PATROL_PAUSE_MAX = 1800;
 
 export default class Agent {
-  /**
-   * @param {Phaser.Scene} scene
-   * @param {number}       x        world X (centre)
-   * @param {number}       y        world Y (centre)
-   * @param {string}       name     e.g. 'Deployer'
-   * @param {string}       agentKey e.g. 'deployer'
-   * @param {number}       tint     0xRRGGBB accent for progress bar
-   */
   constructor(scene, x, y, name, agentKey, tint) {
     this.scene     = scene;
     this.name      = name;
@@ -42,7 +33,7 @@ export default class Agent {
     this.homeX     = x;
     this.homeY     = y;
     this.currentZone = null;
-    this.idleBehavior = null; // Set by scene after creation
+    this.idleBehavior = null;
 
     // Walk animation state
     this._walkFrame    = 0;
@@ -52,52 +43,48 @@ export default class Agent {
 
     // ── Container (all children positioned relative to container origin) ──
     this.container = scene.add.container(x, y);
-    this.container.setDepth(25);  // Higher than furniture (depth 5)
+    this.container.setDepth(25);
 
-    // Sprite using pixel-agents character PNG assets
-    const spriteKey = `agent_${agentKey}`;
-
-    // Try to use loaded PNG sprite, fallback to placeholder
-    if (scene.textures.exists(spriteKey)) {
-      this.sprite = scene.add.image(0, 0, spriteKey);
-      this.sprite.setOrigin(0.5, 0.5);
-      // Scale character sprite to visible size (64x64 - larger than tiles for visibility)
-      this.sprite.setDisplaySize(64, 64);
+    // Character sprite from spritesheet
+    const textureKey = `char_${this._getCharIdx(agentKey)}`;
+    if (scene.textures.exists(textureKey)) {
+      this.sprite = scene.add.sprite(0, 0, textureKey, 0);
+      this.sprite.setOrigin(0.5, 1);  // anchor at bottom-center
+      this.sprite.setScale(2);        // 16×32 → 32×64 visible size
       this.sprite.setDepth(20);
     } else {
-      // Fallback: colored rectangle (larger for visibility)
-      this.sprite = scene.add.rectangle(0, 0, 64, 64, tint, 0.9);
-      this.sprite.setOrigin(0.5, 0.5);
+      this.sprite = scene.add.rectangle(0, 0, 32, 64, tint, 0.9);
+      this.sprite.setOrigin(0.5, 1);
       this.sprite.setDepth(20);
-      console.warn(`Sprite not loaded: ${spriteKey}, using placeholder`);
+      console.warn(`Spritesheet missing: ${textureKey}`);
     }
 
     // Name label
-    this.label = scene.add.text(0, 22, name, {
+    this.label = scene.add.text(0, 8, name, {
       fontSize: '9px',
       color: '#cbd5e1',
       fontFamily: 'monospace',
       stroke: '#0f172a',
       strokeThickness: 2,
-    }).setOrigin(0.5, 0);
+    }).setOrigin(0.5, 1);
 
     // Progress bar background
-    this.progressBg = scene.add.rectangle(0, -24, 38, 5, 0x1e293b)
+    this.progressBg = scene.add.rectangle(0, -42, 38, 5, 0x1e293b)
       .setStrokeStyle(1, 0x334155)
       .setVisible(false);
 
-    // Progress fill (positioned left-edge at -19)
-    this.progressFill = scene.add.rectangle(-19, -24, 0, 3, tint)
+    // Progress fill
+    this.progressFill = scene.add.rectangle(-19, -42, 0, 3, tint)
       .setOrigin(0, 0.5)
       .setVisible(false);
 
-    // Speech bubble background (wider, sits above progress bar)
-    this.bubbleBg = scene.add.rectangle(0, -42, 108, 18, 0x0f172a, 0.93)
+    // Speech bubble background
+    this.bubbleBg = scene.add.rectangle(0, -60, 108, 18, 0x0f172a, 0.93)
       .setStrokeStyle(1, 0x334155)
       .setVisible(false);
 
     // Speech bubble text
-    this.bubbleText = scene.add.text(0, -42, '', {
+    this.bubbleText = scene.add.text(0, -60, '', {
       fontSize: '8px',
       color: '#e2e8f0',
       fontFamily: 'monospace',
@@ -105,8 +92,8 @@ export default class Agent {
       wordWrap: { width: 102, useAdvancedWrap: true },
     }).setOrigin(0.5, 0.5).setVisible(false);
 
-    // Depth indicator dot (tiny colored circle under sprite)
-    this.shadow = scene.add.ellipse(0, 14, 18, 6, 0x000020, 0.4);
+    // Shadow
+    this.shadow = scene.add.ellipse(0, 10, 18, 6, 0x000020, 0.4);
 
     // Add children to container in draw order
     this.container.add([
@@ -119,8 +106,13 @@ export default class Agent {
       this.bubbleText,
     ]);
 
-    // Start idle patrol immediately
+    // Start idle patrol
     this._schedulePatrol();
+  }
+
+  _getCharIdx(agentKey) {
+    const map = { deployer: 0, distributor: 1, swapper: 2, extractor: 3 };
+    return map[agentKey] ?? 0;
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -151,7 +143,7 @@ export default class Agent {
     this._stopPatrol();
     this._stopWalkAnim();
     this.state = STATE.WORKING;
-    this._setSprite(`agent_${this.agentKey}_work0`);
+    this._setFrame(3);  // typing frame 0
     this._startTypingAnim();
     this.setChatText(action);
     this.setProgress(progress);
@@ -170,7 +162,6 @@ export default class Agent {
     this.hideProgress();
     this.setChatText('Done ✓');
 
-    // Bounce tween on the container
     this.scene.tweens.add({
       targets: this.container,
       y: this.container.y - 18,
@@ -180,7 +171,7 @@ export default class Agent {
       ease: 'Sine.easeOut',
       onComplete: () => {
         this.state = STATE.IDLE;
-        this._setSprite(`agent_${this.agentKey}_idle`);
+        this._setFrame(0);
         this.scene.time.delayedCall(900, () => {
           this.hideChat();
           this._schedulePatrol();
@@ -194,7 +185,7 @@ export default class Agent {
     this._stopPatrol();
     this._stopWalkAnim();
     this.state = STATE.IDLE;
-    this._setSprite(`agent_${this.agentKey}_idle`);
+    this._setFrame(0);
     this.hideProgress();
     this.hideChat();
     this.container.setPosition(this.homeX, this.homeY);
@@ -204,7 +195,6 @@ export default class Agent {
 
   // ── Frame update (called from scene) ──
   update(time) {
-    // Continuous idle behavior checking (prevents freezing)
     if (this.state === STATE.IDLE || this.state === STATE.PATROLLING) {
       if (this.idleBehavior) {
         this.idleBehavior.update();
@@ -243,19 +233,13 @@ export default class Agent {
 
   // ── Internal helpers ────────────────────────────────────────────────────────
 
-  _setSprite(key) {
-    if (this.scene.textures.exists(key)) {
-      this.sprite.setTexture(key);
-    } else {
-      // Fall back to base agent sprite if animation frame not found
-      const baseKey = `agent_${this.agentKey}`;
-      if (this.scene.textures.exists(baseKey)) {
-        this.sprite.setTexture(baseKey);
-      }
+  _setFrame(frameIdx) {
+    if (this.sprite && this.sprite.setFrame) {
+      this.sprite.setFrame(frameIdx);
     }
   }
 
-  /** Move the container to (tx, ty) with a walk animation. */
+  /** Move container to (tx, ty) with a walk animation. */
   _walkTo(tx, ty, duration, onComplete) {
     this.state = STATE.WALKING;
     if (this._activeTween) {
@@ -271,22 +255,22 @@ export default class Agent {
       ease: 'Sine.easeInOut',
       onComplete: () => {
         this._stopWalkAnim();
-        this._setSprite(`agent_${this.agentKey}_idle`);
+        this._setFrame(0);
         if (onComplete) onComplete();
       }
     });
   }
 
-  /** Flip-flop walk frames on a timer. */
+  /** Alternate walk frames on a timer. */
   _startWalkAnim() {
     if (this._walkTimer) return;
+    this._walkFrame = 0;
     this._walkTimer = this.scene.time.addEvent({
       delay: WALK_FRAME_INTERVAL_MS,
       loop: true,
       callback: () => {
-        this._walkFrame = 1 - this._walkFrame;
-        const key = `agent_${this.agentKey}_walk${this._walkFrame}`;
-        this._setSprite(key);
+        this._walkFrame = (this._walkFrame + 1) % 3;  // frames 0, 1, 2 for walk
+        this._setFrame(this._walkFrame);
       }
     });
   }
@@ -296,18 +280,20 @@ export default class Agent {
       this._walkTimer.remove(false);
       this._walkTimer = null;
     }
+    this._setFrame(0);
   }
 
-  /** Typing animation: alternate work0 / work1 frames. */
+  /** Alternate typing frames on a timer. */
   _startTypingAnim() {
-    if (this._walkTimer) return; // reuse slot
+    if (this._walkTimer) return;
+    this._walkFrame = 0;
     this._walkTimer = this.scene.time.addEvent({
       delay: 350,
       loop: true,
       callback: () => {
         this._walkFrame = 1 - this._walkFrame;
-        const key = `agent_${this.agentKey}_work${this._walkFrame}`;
-        this._setSprite(key);
+        // typing frames: 3, 4
+        this._setFrame(3 + this._walkFrame);
       }
     });
   }
@@ -320,7 +306,6 @@ export default class Agent {
       this._patrolTimer = null;
       if (this.state !== STATE.IDLE && this.state !== STATE.PATROLLING) return;
 
-      // Check idle behavior (coffee, couch, etc.)
       if (this.idleBehavior) {
         this.idleBehavior.update();
       }
@@ -335,7 +320,6 @@ export default class Agent {
     const cy = this.container.y;
     const dx = Phaser.Math.Between(-PATROL_STEP_MAX, PATROL_STEP_MAX);
     const dy = Phaser.Math.Between(-PATROL_STEP_MAX / 2, PATROL_STEP_MAX / 2);
-    // Clamp to stay near home
     const tx = Phaser.Math.Clamp(cx + dx, this.homeX - PATROL_STEP_MAX, this.homeX + PATROL_STEP_MAX);
     const ty = Phaser.Math.Clamp(cy + dy, this.homeY - PATROL_STEP_MAX / 2, this.homeY + PATROL_STEP_MAX / 2);
     const dist = Phaser.Math.Distance.Between(cx, cy, tx, ty);

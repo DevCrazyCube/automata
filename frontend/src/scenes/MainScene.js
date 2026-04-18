@@ -188,13 +188,16 @@ class MainScene extends Phaser.Scene {
 
     cam.setBounds(0, 0, W, H);
 
-    // Fit entire office in view
-    const viewport = cam;
-    const zoomX = viewport.width / W;
-    const zoomY = viewport.height / H;
-    const zoom = Math.min(zoomX, zoomY) * 0.9;
+    // Fit entire office in view, leaving room for title at top
+    const titleSpace = 20;
+    const availableWidth = cam.width;
+    const availableHeight = cam.height - titleSpace;
 
-    cam.setZoom(Math.max(zoom, 0.5));
+    const zoomX = availableWidth / W;
+    const zoomY = availableHeight / H;
+    const zoom = Math.min(zoomX, zoomY);
+
+    cam.setZoom(zoom);
     cam.centerOn(W / 2, H / 2);
   }
 

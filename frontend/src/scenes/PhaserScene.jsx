@@ -8,10 +8,10 @@ import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
 import MainScene from './MainScene.js';
 
-// Fixed canvas dimensions for office: 21 cols × 22 rows × 32px = 672×704
-// Add some padding for UI
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 750;
+// Canvas dimensions: 21 cols × 22 rows × 32px = 672×704
+// Match office size to fill container properly
+const CANVAS_WIDTH = 672;
+const CANVAS_HEIGHT = 704;
 
 function PhaserScene({ onGameReady }) {
   const containerRef = useRef(null);
