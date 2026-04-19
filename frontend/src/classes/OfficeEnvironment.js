@@ -237,13 +237,11 @@ export default class OfficeEnvironment {
       let x = item.col * TILE_SIZE;
       let y = item.row * TILE_SIZE;
 
-      // Pixel-perfect PC attach: if this is a PC sitting on a desk cell,
-      // nudge the sprite up slightly so the monitor base aligns with the
-      // desk's top surface.
+      // PC sitting on a desk cell: keep same Y as desk so monitor poking
+      // above the desk top reads naturally. Depth bonus below ensures the
+      // PC sprite always renders in front of (after) the desk sprite.
       const isPC = item.type && item.type.includes('PC');
-      if (isPC && deskAt.has(`${item.col},${item.row}`)) {
-        y -= 8; // 8px (quarter tile) lift = monitor base on desk top
-      }
+      const onDesk = isPC && deskAt.has(`${item.col},${item.row}`);
 
       const sprite = this.scene.add.image(x, y, entry.textureKey);
       sprite.setOrigin(0, 0);
@@ -253,9 +251,10 @@ export default class OfficeEnvironment {
         sprite.setFlipX(true);
       }
 
-      // Depth: y-sort by bottom edge of scaled sprite.
+      // Depth: y-sort by bottom edge of scaled sprite. PCs on desks need a
+      // small bonus so they always draw above the desk they sit on.
       const spriteH = (entry.height || ART_SIZE) * SPRITE_SCALE;
-      const bottomEdge = y + spriteH;
+      const bottomEdge = y + spriteH + (onDesk ? 4 : 0);
       sprite.setDepth(bottomEdge);
 
       this.furnitureSprites.push(sprite);
