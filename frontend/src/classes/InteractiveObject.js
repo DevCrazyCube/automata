@@ -167,26 +167,19 @@ export default class InteractiveObject {
   }
 
   _couchInteraction(agent) {
-    // Sit down animation
-    this._safePlayAnim(agent,`${agent.agentKey}_sit_down`, agent.sprite);
+    agent.state = 'sitting';
+    // Reading/sitting frame (row 0 reading pose = frame 5)
+    agent._setFrame(5);
+    agent.setChatText('Relaxing…');
 
-    this.scene.time.delayedCall(600, () => {
-      agent._setSprite(`agent_${agent.agentKey}_couch0`);
-      agent.setChatText('Relaxing…');
-
-      // Sit for 10 seconds
-      this.scene.time.delayedCall(10000, () => {
-        // Get up animation
-        this._safePlayAnim(agent,`${agent.agentKey}_get_up`, agent.sprite);
-        this.scene.time.delayedCall(400, () => {
-          this._completeInteraction(agent);
-        });
-      });
+    this.scene.time.delayedCall(10000, () => {
+      this._completeInteraction(agent);
     });
   }
 
   _tableInteraction(agent) {
-    agent._setSprite(`agent_${agent.agentKey}_idle0`);
+    agent.state = 'sitting';
+    agent._setFrame(5);
     agent.setChatText('At table…');
 
     // Check for other agents at table
@@ -200,7 +193,6 @@ export default class InteractiveObject {
     const duration = nearbyAgents.length >= 2 ? 12000 : 6000;
 
     if (nearbyAgents.length >= 2) {
-      this._safePlayAnim(agent,`${agent.agentKey}_talk`, agent.sprite);
       agent.setChatText('Chatting');
     }
 

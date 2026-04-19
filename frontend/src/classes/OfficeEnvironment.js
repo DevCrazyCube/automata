@@ -1,8 +1,13 @@
 // classes/OfficeEnvironment.js
-// Renders the office from default-layout-1.json.
+// Renders the office from default-layout-1.json with depth-styled walls,
+// zone-tinted floors, and pixel-perfect furniture stacking.
+//
 // Art assets are 16px-based (floors 16×16, furniture sized in 16px units).
-// Logic grid is 32px per tile → every sprite renders at SPRITE_SCALE = 2×
-// so footprints map correctly onto the grid and no checker gaps appear.
+// Logic grid is 32px per tile → every sprite renders at SPRITE_SCALE = 2×.
+//
+// Wall depth: for every wall tile whose south neighbor is floor, we draw a
+// lighter "inner lip" strip on top of the wall rect to simulate the vertical
+// face of a thick wall (top-down iso-ish effect).
 
 import InteractiveObject from './InteractiveObject.js';
 import { buildFurnitureCatalog } from './SpriteFactory.js';
@@ -13,7 +18,11 @@ const SPRITE_SCALE = TILE_SIZE / ART_SIZE;
 const VOID_TILE = 255;
 const WALL_TILE = 0;
 const FALLBACK_FLOOR = 0xd4c9b8;
-const WALL_COLOR = 0x4a5568;
+
+// Wall palette: outer dark (shadowed base) + inner lighter lip.
+const WALL_OUTER = 0x3a3f4a;
+const WALL_INNER = 0x5b6270;
+const WALL_TRIM  = 0x2a2e35;
 
 export default class OfficeEnvironment {
   constructor(scene) {
@@ -25,7 +34,6 @@ export default class OfficeEnvironment {
     this.interactiveObjects = {};
   }
 
-  /** Synchronous build — all assets are already in scene.cache when called. */
   build() {
     this.layout = this.scene.cache.json.get('layout');
     if (!this.layout) {
@@ -34,13 +42,12 @@ export default class OfficeEnvironment {
     }
 
     this.catalog = buildFurnitureCatalog(this.scene);
-    console.log(`Catalog built: ${this.catalog.size} furniture entries`);
 
     this._renderTilemap();
+    this._renderWallDepth();
     this._placeFurniture();
     this._createInteractiveObjects();
 
-    console.log(`Office built: ${this.tileSprites.length} tiles, ${this.furnitureSprites.length} furniture sprites`);
     return this.interactiveObjects;
   }
 
@@ -58,68 +65,104 @@ export default class OfficeEnvironment {
 
         let tile;
         if (tileType === WALL_TILE) {
-          // Walls always render as solid colored tiles. wall_0.png is a
-          // 64×128 tileset, not a single 16×16 tile — drawing it as one
-          // image at each wall cell would produce broken overlap.
-          const color = this._tileColorToHex(tileColors?.[idx]) ?? WALL_COLOR;
-          tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
+          tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, WALL_OUTER);
           tile.setOrigin(0, 0);
+          tile.setDepth(1);
         } else {
-          // Floor sprite (16×16 native) scaled 2× to fill the 32px tile cell.
           const spriteKey = `floor_${Math.min(tileType, 8)}`;
           if (this.scene.textures.exists(spriteKey)) {
             tile = this.scene.add.image(x, y, spriteKey);
             tile.setOrigin(0, 0);
             tile.setScale(SPRITE_SCALE);
+
+            // Apply zone tint (from layout.tileColors) as a tint on the sprite.
+            const adj = tileColors?.[idx] || tileColors?.[String(idx)];
+            if (adj) {
+              const tint = this._adjustColor(0xffffff, adj);
+              tile.setTint(tint);
+            }
           } else {
             const color = this._floorColor(tileType, tileColors?.[idx]);
             tile = this.scene.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, color);
             tile.setOrigin(0, 0);
           }
+          tile.setDepth(0);
         }
 
-        tile.setDepth(0);
         this.tileSprites.push(tile);
       }
     }
   }
 
-  /** Pixel-agents HSL-ish colorization: hue/saturation/brightness/contrast deltas
-   *  applied to a base floor/wall color. Simplified: use the encoded h/s/b as
-   *  HSL directly (b is brightness shift, -100 = black, +100 = white). */
+  /** Draw a lighter lip on top of walls that have a floor neighbor to their
+   *  south — simulates wall thickness/depth in a top-down pixel room. */
+  _renderWallDepth() {
+    const { cols, rows, tiles } = this.layout;
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const idx = row * cols + col;
+        if (tiles[idx] !== WALL_TILE) continue;
+
+        const x = col * TILE_SIZE;
+        const y = row * TILE_SIZE;
+
+        // Inner (south-facing) lip: lighter strip along the bottom of the wall
+        // cell when the tile below is a floor.
+        const southIdx = (row + 1) * cols + col;
+        const south = row + 1 < rows ? tiles[southIdx] : VOID_TILE;
+        if (south !== WALL_TILE && south !== VOID_TILE) {
+          const lip = this.scene.add.rectangle(
+            x, y + TILE_SIZE - 8, TILE_SIZE, 8, WALL_INNER
+          );
+          lip.setOrigin(0, 0);
+          lip.setDepth(1.1);
+          this.tileSprites.push(lip);
+
+          // Thin trim line at the very base of the wall (floor joint)
+          const trim = this.scene.add.rectangle(
+            x, y + TILE_SIZE - 2, TILE_SIZE, 2, WALL_TRIM
+          );
+          trim.setOrigin(0, 0);
+          trim.setDepth(1.2);
+          this.tileSprites.push(trim);
+        }
+
+        // Top highlight: thin light edge on north-facing wall tops
+        const northIdx = (row - 1) * cols + col;
+        const north = row - 1 >= 0 ? tiles[northIdx] : VOID_TILE;
+        if (north === VOID_TILE) {
+          const top = this.scene.add.rectangle(
+            x, y, TILE_SIZE, 3, 0x242830
+          );
+          top.setOrigin(0, 0);
+          top.setDepth(1.3);
+          this.tileSprites.push(top);
+        }
+      }
+    }
+  }
+
   _floorColor(tileType, color) {
     const baseFloors = [
-      0x8a8a8a, // 0 (wall) — not used here
-      0xb8a98e, // 1 — tan floor
-      0xa68d6b, // 2
-      0x9c8a72, // 3
-      0x8e7a5a, // 4
-      0xbaa782, // 5
-      0xa89170, // 6
-      0xc4b391, // 7 — light tan
-      0xa6916f, // 8
-      0x8f7e65, // 9
+      0x8a8a8a, 0xb8a98e, 0xa68d6b, 0x9c8a72, 0x8e7a5a,
+      0xbaa782, 0xa89170, 0xc4b391, 0xa6916f, 0x8f7e65,
     ];
     const base = baseFloors[tileType] ?? FALLBACK_FLOOR;
     if (!color) return base;
     return this._adjustColor(base, color);
   }
 
-  /** Apply h/s/b/c shifts to a base RGB hex color. */
   _adjustColor(baseHex, adj) {
     const r0 = (baseHex >> 16) & 0xff;
     const g0 = (baseHex >> 8) & 0xff;
     const b0 = baseHex & 0xff;
 
-    // brightness: -100..+100 → scale toward black/white
     const bShift = (adj.b || 0) / 100;
     const sShift = (adj.s || 0) / 100;
 
-    let r = r0 / 255;
-    let g = g0 / 255;
-    let b = b0 / 255;
+    let r = r0 / 255, g = g0 / 255, b = b0 / 255;
 
-    // Apply brightness
     if (bShift >= 0) {
       r = r + (1 - r) * bShift;
       g = g + (1 - g) * bShift;
@@ -130,13 +173,11 @@ export default class OfficeEnvironment {
       b = b * (1 + bShift);
     }
 
-    // Apply saturation (shift toward/away from grey)
     const grey = (r + g + b) / 3;
     r = grey + (r - grey) * (1 + sShift);
     g = grey + (g - grey) * (1 + sShift);
     b = grey + (b - grey) * (1 + sShift);
 
-    // Apply hue shift (rotate RGB — very rough but OK for variation)
     const hShift = ((adj.h || 0) % 360) / 360;
     if (hShift) {
       const [rr, gg, bb] = this._rotateHue([r, g, b], hShift);
@@ -151,7 +192,6 @@ export default class OfficeEnvironment {
   }
 
   _rotateHue([r, g, b], amount) {
-    // amount in [0,1]
     const cosA = Math.cos(amount * Math.PI * 2);
     const sinA = Math.sin(amount * Math.PI * 2);
     const matrix = [
@@ -161,8 +201,8 @@ export default class OfficeEnvironment {
       0.299 - 0.299 * cosA - 0.328 * sinA,
       0.587 + 0.413 * cosA + 0.035 * sinA,
       0.114 - 0.114 * cosA + 0.292 * sinA,
-      0.299 - 0.3 * cosA + 1.25 * sinA,
-      0.587 - 0.588 * cosA - 1.05 * sinA,
+      0.299 - 0.3   * cosA + 1.25  * sinA,
+      0.587 - 0.588 * cosA - 1.05  * sinA,
       0.114 + 0.886 * cosA - 0.203 * sinA,
     ];
     return [
@@ -172,45 +212,48 @@ export default class OfficeEnvironment {
     ];
   }
 
-  _tileColorToHex(color) {
-    if (!color) return null;
-    return this._adjustColor(0x5a6b8a, color); // dark wall base
-  }
-
   _placeFurniture() {
     const furniture = this.layout.furniture || [];
     const { cols, tiles } = this.layout;
 
+    // Build a PC→desk pairing map so PC sprites render precisely on the desk
+    // top face rather than hovering a tile above.
+    const deskAt = new Map();
     for (const item of furniture) {
-      // Skip items anchored on VOID tiles (wall-mounted decor above the office
-      // that would otherwise float over the dark canvas background).
+      if (item.type && item.type.includes('DESK')) {
+        deskAt.set(`${item.col},${item.row}`, item);
+      }
+    }
+
+    for (const item of furniture) {
       const tileIdx = item.row * cols + item.col;
       if (tiles[tileIdx] === VOID_TILE) continue;
 
       const entry = this.catalog.get(item.type);
-      if (!entry) {
-        console.warn(`No catalog entry for ${item.type}`);
-        continue;
-      }
+      if (!entry) continue;
 
-      if (!this.scene.textures.exists(entry.textureKey)) {
-        console.warn(`Texture missing: ${entry.textureKey}`);
-        continue;
-      }
+      if (!this.scene.textures.exists(entry.textureKey)) continue;
 
-      const x = item.col * TILE_SIZE;
-      const y = item.row * TILE_SIZE;
+      let x = item.col * TILE_SIZE;
+      let y = item.row * TILE_SIZE;
+
+      // Pixel-perfect PC attach: if this is a PC sitting on a desk cell,
+      // nudge the sprite up slightly so the monitor base aligns with the
+      // desk's top surface.
+      const isPC = item.type && item.type.includes('PC');
+      if (isPC && deskAt.has(`${item.col},${item.row}`)) {
+        y -= 8; // 8px (quarter tile) lift = monitor base on desk top
+      }
 
       const sprite = this.scene.add.image(x, y, entry.textureKey);
       sprite.setOrigin(0, 0);
       sprite.setScale(SPRITE_SCALE);
 
-      // Mirror horizontally for :left variants
       if (entry.orientation === 'left' && entry.mirrorSide) {
         sprite.setFlipX(true);
       }
 
-      // Depth: y-sort by bottom edge of scaled sprite (matches pixel-agents zY).
+      // Depth: y-sort by bottom edge of scaled sprite.
       const spriteH = (entry.height || ART_SIZE) * SPRITE_SCALE;
       const bottomEdge = y + spriteH;
       sprite.setDepth(bottomEdge);
@@ -231,22 +274,20 @@ export default class OfficeEnvironment {
         this.interactiveObjects.coffee = new InteractiveObject(this.scene, x, y, 'coffee');
       } else if (typeKey.startsWith('SOFA') && !this.interactiveObjects.couch) {
         this.interactiveObjects.couch = new InteractiveObject(this.scene, x, y, 'couch');
-      } else if (typeKey.startsWith('TABLE') || typeKey.startsWith('SMALL_TABLE')) {
-        if (!this.interactiveObjects.table) {
-          this.interactiveObjects.table = new InteractiveObject(this.scene, x, y, 'table');
-        }
+      } else if ((typeKey.startsWith('TABLE') || typeKey.startsWith('SMALL_TABLE')
+                  || typeKey === 'COFFEE_TABLE') && !this.interactiveObjects.table) {
+        this.interactiveObjects.table = new InteractiveObject(this.scene, x, y, 'table');
       } else if (typeKey === 'WHITEBOARD' && !this.interactiveObjects.whiteboard) {
         this.interactiveObjects.whiteboard = new InteractiveObject(this.scene, x, y, 'whiteboard');
       }
     }
 
-    // Fallbacks so idle behavior has something to target
     const cx = (this.layout.cols * TILE_SIZE) / 2;
     const cy = (this.layout.rows * TILE_SIZE) / 2;
-    if (!this.interactiveObjects.coffee)     this.interactiveObjects.coffee     = new InteractiveObject(this.scene, cx, cy, 'coffee');
-    if (!this.interactiveObjects.couch)      this.interactiveObjects.couch      = new InteractiveObject(this.scene, cx, cy, 'couch');
-    if (!this.interactiveObjects.table)      this.interactiveObjects.table      = new InteractiveObject(this.scene, cx, cy, 'table');
-    if (!this.interactiveObjects.whiteboard) this.interactiveObjects.whiteboard = new InteractiveObject(this.scene, cx, cy, 'whiteboard');
+    if (!this.interactiveObjects.coffee)       this.interactiveObjects.coffee       = new InteractiveObject(this.scene, cx, cy, 'coffee');
+    if (!this.interactiveObjects.couch)        this.interactiveObjects.couch        = new InteractiveObject(this.scene, cx, cy, 'couch');
+    if (!this.interactiveObjects.table)        this.interactiveObjects.table        = new InteractiveObject(this.scene, cx, cy, 'table');
+    if (!this.interactiveObjects.whiteboard)   this.interactiveObjects.whiteboard   = new InteractiveObject(this.scene, cx, cy, 'whiteboard');
     if (!this.interactiveObjects.water_cooler) this.interactiveObjects.water_cooler = new InteractiveObject(this.scene, cx, cy, 'water_cooler');
   }
 

@@ -14,6 +14,7 @@ export const STATE = {
   PATROLLING:  'patrolling',
   WALKING:     'walking',
   WORKING:     'working',
+  SITTING:     'sitting',
   CELEBRATING: 'celebrating',
 };
 
@@ -140,15 +141,29 @@ export default class Agent {
     this._walkTo(x, y, duration, onComplete);
   }
 
-  /** Show working-at-desk pose + typing animation. */
+  /** Walk to this agent's workstation and play typing animation.
+   *  Reserves the workstation so other agents (shouldn't normally happen,
+   *  since each workstation has one owner, but still) cannot double-book. */
   startWorking(action, progress = 0) {
     this._stopPatrol();
     this._stopWalkAnim();
-    this.state = STATE.WORKING;
-    this._setFrame(3);  // typing frame 0
-    this._startTypingAnim();
-    this.setChatText(action);
-    this.setProgress(progress);
+
+    const ws = this.workstation;
+    const beginTyping = () => {
+      this.state = STATE.WORKING;
+      this._setFrame(10);        // up-facing typing (sits south, faces desk north)
+      this._startTypingAnim();
+      this.setChatText(action);
+      this.setProgress(progress);
+    };
+
+    if (ws && !ws.isOccupied()) {
+      ws.reserve(this, 30000);
+      const seat = ws.getWorkingPosition();
+      this._walkTo(seat.x, seat.y, 500, beginTyping);
+    } else {
+      beginTyping();
+    }
   }
 
   /** Update progress bar mid-work. */
@@ -263,14 +278,43 @@ export default class Agent {
     }
   }
 
-  /** Move container to (tx, ty) with a walk animation. */
+  /** Move container to (tx, ty) with a walk animation.
+   *  Sets facing frame based on movement direction for believability. */
   _walkTo(tx, ty, duration, onComplete) {
     this.state = STATE.WALKING;
     if (this._activeTween) {
       this._activeTween.stop();
       this._activeTween = null;
     }
+    if (this._bobTween) { this._bobTween.stop(); this._bobTween = null; }
+
+    // Choose direction row based on dominant axis.
+    const dx = tx - this.container.x;
+    const dy = ty - this.container.y;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      this._walkRow = 2;        // right (flip for left)
+      this.sprite.setFlipX(dx < 0);
+    } else if (dy < 0) {
+      this._walkRow = 1;        // up
+      this.sprite.setFlipX(false);
+    } else {
+      this._walkRow = 0;        // down
+      this.sprite.setFlipX(false);
+    }
+
     this._startWalkAnim();
+
+    // Subtle vertical bob on sprite only (NOT the container), so the agent's
+    // feet stay on the floor and the tween path is perfectly linear.
+    this._bobTween = this.scene.tweens.add({
+      targets: this.sprite,
+      y: { from: 0, to: -2 },
+      duration: 180,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
     this._activeTween = this.scene.tweens.add({
       targets: this.container,
       x: tx,
@@ -278,26 +322,34 @@ export default class Agent {
       duration,
       ease: 'Linear',
       onComplete: () => {
+        if (this._bobTween) { this._bobTween.stop(); this._bobTween = null; }
+        this.sprite.setY(0);
         this._stopWalkAnim();
-        this._setFrame(0);
+        this._setFrame(this._idleFrameForRow(this._walkRow));
         if (onComplete) onComplete();
       }
     });
   }
 
-  /** Alternate walk frames on a timer. */
+  _idleFrameForRow(row) {
+    // First frame of each direction row is idle-stance.
+    return row === 0 ? 0 : row === 1 ? 7 : 14;
+  }
+
+  /** Alternate walk frames on a timer. Row selects direction (0 down, 1 up, 2 right). */
   _startWalkAnim() {
-    // Clear any existing animation timer
     this._stopWalkAnim();
 
     this._walkFrame = 0;
+    const row = this._walkRow ?? 0;
+    const base = row === 0 ? 0 : row === 1 ? 7 : 14;
     this._walkTimer = this.scene.time.addEvent({
       delay: WALK_FRAME_INTERVAL_MS,
       loop: true,
       callback: () => {
         if (this.state !== STATE.WALKING && this.state !== STATE.PATROLLING) return;
-        this._walkFrame = (this._walkFrame + 1) % 3;  // frames 0, 1, 2 for walk
-        this._setFrame(this._walkFrame);
+        this._walkFrame = (this._walkFrame + 1) % 3;
+        this._setFrame(base + this._walkFrame);
       }
     });
   }
@@ -310,9 +362,9 @@ export default class Agent {
     this._setFrame(0);
   }
 
-  /** Alternate typing frames on a timer. */
+  /** Alternate typing frames on a timer.
+   *  Agent sits south of desk and faces north → use up-row typing frames 10/11. */
   _startTypingAnim() {
-    // Stop any existing walk animation first
     this._stopWalkAnim();
 
     this._walkFrame = 0;
@@ -320,10 +372,9 @@ export default class Agent {
       delay: 350,
       loop: true,
       callback: () => {
-        if (this.state !== STATE.WORKING) return; // Stop if state changed
+        if (this.state !== STATE.WORKING) return;
         this._walkFrame = 1 - this._walkFrame;
-        // typing frames: 3, 4
-        this._setFrame(3 + this._walkFrame);
+        this._setFrame(10 + this._walkFrame);
       }
     });
   }

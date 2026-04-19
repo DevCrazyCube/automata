@@ -53,30 +53,20 @@ export default class IdleBehavior {
     }
   }
 
-  _coffeeBreak() {
-    if (!this.objects.coffee) return;
-    this.objects.coffee.startInteraction(this.agent);
+  // Each helper gates on slot availability — an agent that can't find a free
+  // slot simply stays at its desk rather than stacking on top of someone else.
+  _tryInteract(obj) {
+    if (!obj || !obj.findAvailableSlot) return false;
+    if (!obj.findAvailableSlot()) return false;
+    obj.startInteraction(this.agent);
+    return true;
   }
 
-  _whiteboard() {
-    if (!this.objects.whiteboard) return;
-    this.objects.whiteboard.startInteraction(this.agent);
-  }
-
-  _couch() {
-    if (!this.objects.couch) return;
-    this.objects.couch.startInteraction(this.agent);
-  }
-
-  _table() {
-    if (!this.objects.table) return;
-    this.objects.table.startInteraction(this.agent);
-  }
-
-  _waterCooler() {
-    if (!this.objects.water_cooler) return;
-    this.objects.water_cooler.startInteraction(this.agent);
-  }
+  _coffeeBreak()  { return this._tryInteract(this.objects.coffee); }
+  _whiteboard()   { return this._tryInteract(this.objects.whiteboard); }
+  _couch()        { return this._tryInteract(this.objects.couch); }
+  _table()        { return this._tryInteract(this.objects.table); }
+  _waterCooler()  { return this._tryInteract(this.objects.water_cooler); }
 
   _idleTyping() {
     // Play typing animation at desk
