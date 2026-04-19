@@ -4,6 +4,7 @@
 // Furniture sprites are rendered by OfficeEnvironment only.
 
 import Phaser from 'phaser';
+import InteractionSlot from './InteractionSlot.js';
 
 export default class InteractiveObject {
   constructor(scene, x, y, type, options = {}) {
@@ -13,10 +14,54 @@ export default class InteractiveObject {
     this.type = type; // 'coffee', 'couch', 'table', 'whiteboard', 'water_cooler'
     this.interactionRadius = options.radius || 64;
     this.agentsNearby = new Set();
-    this.agentsInteracting = new Map(); // agent → { state, timer }
+    this.agentsInteracting = new Map(); // agent → { state, slot, timer }
+
+    // Interaction slots: specific positions agents can occupy
+    // By default, create a single default slot at (x, y)
+    this.slots = [];
+    this._initializeSlots();
 
     // No sprite creation — furniture is rendered by OfficeEnvironment
-    // This class is logic-only: interaction anchors, not visible objects
+    // This class is logic-only: interaction anchors + slot occupancy
+  }
+
+  _initializeSlots() {
+    // Different furniture types have different slot configurations
+    if (this.type === 'couch') {
+      // Couch has left and right seats (offset from center)
+      const leftSlot = new InteractionSlot('couch_left', this.x - 16, this.y, 'couch');
+      const rightSlot = new InteractionSlot('couch_right', this.x + 16, this.y, 'couch');
+      this.slots.push(leftSlot, rightSlot);
+    } else if (this.type === 'table') {
+      // Table has multiple seats (simple 2-seat version)
+      const seat1 = new InteractionSlot('table_seat_1', this.x - 16, this.y, 'table');
+      const seat2 = new InteractionSlot('table_seat_2', this.x + 16, this.y, 'table');
+      this.slots.push(seat1, seat2);
+    } else {
+      // Default: single slot at the furniture center
+      const defaultSlot = new InteractionSlot(
+        'default',
+        this.x,
+        this.y,
+        this.type
+      );
+      this.slots.push(defaultSlot);
+    }
+  }
+
+  findAvailableSlot() {
+    // Return the first available slot
+    for (const slot of this.slots) {
+      if (!slot.isOccupied()) {
+        return slot;
+      }
+    }
+    return null;
+  }
+
+  getSlotForAgent(agent) {
+    // Try to find an available slot
+    return this.findAvailableSlot();
   }
 
   // Check if agent is in interaction radius
@@ -31,24 +76,34 @@ export default class InteractiveObject {
   startInteraction(agent) {
     if (this.agentsInteracting.has(agent)) return;
 
+    // Find an available slot for this agent
+    const slot = this.getSlotForAgent(agent);
+    if (!slot) {
+      // No available slots
+      return;
+    }
+
     const interaction = {
       state: 'walking',
       agent,
+      slot,
       startTime: Date.now(),
-      prevActivity: null,
     };
 
     this.agentsInteracting.set(agent, interaction);
+    slot.reserve(agent);
     agent._stopPatrol();
     agent._stopWalkAnim();
 
-    // Walk to object center
+    // Walk to the slot position
+    const targetX = slot.x;
+    const targetY = slot.y;
     const distance = Phaser.Math.Distance.Between(
-      agent.container.x, agent.container.y, this.x, this.y
+      agent.container.x, agent.container.y, targetX, targetY
     );
     const duration = Phaser.Math.Clamp(distance * 4, 300, 1200);
 
-    agent._walkTo(this.x, this.y, duration, () => {
+    agent._walkTo(targetX, targetY, duration, () => {
       this._playInteraction(agent);
     });
   }
@@ -177,6 +232,11 @@ export default class InteractiveObject {
   _completeInteraction(agent) {
     const interaction = this.agentsInteracting.get(agent);
     if (!interaction) return;
+
+    // Release the interaction slot
+    if (interaction.slot) {
+      interaction.slot.release();
+    }
 
     agent.hideChat();
     agent._setSprite(`agent_${agent.agentKey}_idle`);
