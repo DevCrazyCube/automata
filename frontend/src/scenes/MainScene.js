@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 import Agent from '../classes/Agent.js';
 import { registerAll, registerAnimations, queueFurnitureLoads } from '../classes/SpriteFactory.js';
 import OfficeEnvironment from '../classes/OfficeEnvironment.js';
+import Workstation from '../classes/Workstation.js';
 import IdleBehavior from '../classes/IdleBehavior.js';
 import AgentInteraction from '../classes/AgentInteraction.js';
 import { AgentClickHandler } from '../services/agentClickService.js';
@@ -84,6 +85,7 @@ class MainScene extends Phaser.Scene {
   constructor() {
     super({ key: 'MainScene' });
     this.agents   = {};   // key → Agent instance
+    this.workstations = {}; // key → Workstation instance
     this.zones    = {};   // key → { x, y, width, height } logical zone
     this.handlers = [];   // socket handler refs for cleanup
     this.office   = null; // OfficeEnvironment instance
@@ -109,7 +111,9 @@ class MainScene extends Phaser.Scene {
     this.load.once('complete', () => {
       console.log('Furniture loads complete, building office...');
       this._buildOffice();
+      this._buildWorkstations();
       this._buildAgents();
+      this._assignWorkstations();
       this._setupIdleBehaviors();
       this._setupAgentInteraction();
       this._setupAgentClicking();
@@ -194,6 +198,83 @@ class MainScene extends Phaser.Scene {
       setWorldDimensions(newWidth, newHeight);
       WORLD_WIDTH = newWidth;
       WORLD_HEIGHT = newHeight;
+    }
+  }
+
+  // ── Workstation building ────────────────────────────────────────────────────
+
+  _buildWorkstations() {
+    const layout = this.office?.layout;
+    if (!layout || !layout.furniture) return;
+
+    // Find DESK+PC pairs to form workstations
+    const desks = [];
+    const pcs = [];
+
+    for (const item of layout.furniture) {
+      if (item.type && item.type.includes('DESK')) {
+        desks.push(item);
+      } else if (item.type && item.type.includes('PC')) {
+        pcs.push(item);
+      }
+    }
+
+    // Pair desks with nearby PCs to form workstations
+    let wsIndex = 0;
+    for (const desk of desks) {
+      // Find the nearest PC to this desk
+      let nearestPC = null;
+      let minDist = Infinity;
+
+      for (const pc of pcs) {
+        const dist = Math.abs((pc.col - desk.col)) + Math.abs((pc.row - desk.row));
+        if (dist < minDist && !pcs.some(p => p === pc && p.used)) {
+          minDist = dist;
+          nearestPC = pc;
+        }
+      }
+
+      if (nearestPC && minDist <= 2) {
+        // Found a paired PC
+        const wsId = `ws_${wsIndex++}`;
+        const deskPos = {
+          col: desk.col,
+          row: desk.row,
+          x: desk.col * TILE_SIZE + TILE_SIZE / 2,
+          y: desk.row * TILE_SIZE + TILE_SIZE / 2
+        };
+        const pcPos = {
+          col: nearestPC.col,
+          row: nearestPC.row,
+          x: nearestPC.col * TILE_SIZE + TILE_SIZE / 2,
+          y: nearestPC.row * TILE_SIZE + TILE_SIZE / 2
+        };
+        const seatPos = {
+          x: deskPos.x,
+          y: deskPos.y + 24 // slightly forward to sit at desk
+        };
+
+        // Create workstation (owner will be assigned later)
+        const ws = new Workstation(wsId, null, deskPos, pcPos, seatPos);
+        this.workstations[wsId] = ws;
+        nearestPC.used = true;
+      }
+    }
+
+    console.log(`Workstations built: ${Object.keys(this.workstations).length}`);
+  }
+
+  _assignWorkstations() {
+    const agentKeys = ['deployer', 'distributor', 'swapper', 'extractor'];
+    const wsKeys = Object.keys(this.workstations);
+
+    // Assign each agent to a workstation
+    for (let i = 0; i < agentKeys.length && i < wsKeys.length; i++) {
+      const agentKey = agentKeys[i];
+      const wsKey = wsKeys[i];
+      const ws = this.workstations[wsKey];
+      ws.agentKey = agentKey; // Set the owner
+      this.agents[agentKey].workstation = ws; // Give agent reference to their workstation
     }
   }
 
